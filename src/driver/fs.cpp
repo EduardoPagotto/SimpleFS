@@ -3,8 +3,8 @@
 #include "sfs/fs.h"
 
 #include <algorithm>
-
 #include <assert.h>
+#include <cmath>
 #include <stdio.h>
 #include <string.h>
 
@@ -71,7 +71,7 @@ bool FileSystem::format(Disk* disk) {
 
     block.Super.MagicNumber = FileSystem::MAGIC_NUMBER;
     block.Super.Blocks = disk->size();
-    block.Super.InodeBlocks = block.Super.Blocks > 10 ? block.Super.Blocks / 10 : 1;
+    block.Super.InodeBlocks = (uint32_t)std::ceil((int(block.Super.Blocks) * 1.00) / 10);
     block.Super.Inodes = block.Super.InodeBlocks * (FileSystem::INODES_PER_BLOCK);
 
     disk->write(0, block.Data);
@@ -160,13 +160,14 @@ bool FileSystem::mount(Disk* disk) {
     }
 
     this->fs_disk = disk;
+    this->mounted = true;
     return true;
 }
 
 // Create inode ----------------------------------------------------------------
 
 ssize_t FileSystem::create() {
-    if (!this->fs_disk->mounted())
+    if (!mounted)
         return false;
 
     Block block;
@@ -201,7 +202,7 @@ ssize_t FileSystem::create() {
 
 bool FileSystem::load_inode(size_t inumber, Inode* node) {
 
-    if (!this->fs_disk->mounted())
+    if (!mounted)
         return false;
 
     if ((inumber > MetaData.Inodes) || (inumber < 1)) {
@@ -213,7 +214,7 @@ bool FileSystem::load_inode(size_t inumber, Inode* node) {
     int i = inumber / INODES_PER_BLOCK;
     int j = inumber % INODES_PER_BLOCK;
 
-    if (inode_counter[i]) {
+    if (this->inode_counter[i]) {
         fs_disk->read(i + 1, block.Data);
         if (block.Inodes[j].Valid) {
             *node = block.Inodes[j];
@@ -228,7 +229,7 @@ bool FileSystem::load_inode(size_t inumber, Inode* node) {
 
 bool FileSystem::remove(size_t inumber) {
 
-    if (!this->fs_disk->mounted())
+    if (!mounted)
         return false;
 
     Inode node;
@@ -238,23 +239,23 @@ bool FileSystem::remove(size_t inumber) {
         node.Size = 0;
 
         if (!(--inode_counter[inumber / INODES_PER_BLOCK])) {
-            free_blocks[inumber / INODES_PER_BLOCK + 1] = false;
+            this->free_blocks[inumber / INODES_PER_BLOCK + 1] = false;
         }
 
         for (uint32_t i = 0; i < POINTERS_PER_INODE; i++) {
-            free_blocks[node.Direct[i]] = false;
+            this->free_blocks[node.Direct[i]] = false;
             node.Direct[i] = 0;
         }
 
         if (node.Indirect) {
             Block indirect;
             fs_disk->read(node.Indirect, indirect.Data);
-            free_blocks[node.Indirect] = false;
+            this->free_blocks[node.Indirect] = false;
             node.Indirect = 0;
 
             for (uint32_t i = 0; i < POINTERS_PER_BLOCK; i++) {
                 if (indirect.Pointers[i])
-                    free_blocks[indirect.Pointers[i]] = false;
+                    this->free_blocks[indirect.Pointers[i]] = false;
             }
         }
 
@@ -272,7 +273,7 @@ bool FileSystem::remove(size_t inumber) {
 // Inode stat ------------------------------------------------------------------
 
 ssize_t FileSystem::stat(size_t inumber) {
-    if (!this->fs_disk->mounted())
+    if (!mounted)
         return -1;
 
     Inode node;

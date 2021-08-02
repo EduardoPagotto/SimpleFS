@@ -1,6 +1,5 @@
-// fs.h: File System
-
-#pragma once
+#ifndef __FS_HPP
+#define __FS_HPP
 
 #include "sfs/disk.h"
 
@@ -13,6 +12,9 @@ class FileSystem {
     const static uint32_t INODES_PER_BLOCK = 128;
     const static uint32_t POINTERS_PER_INODE = 5;
     const static uint32_t POINTERS_PER_BLOCK = 1024;
+
+    FileSystem() : mounted(false), fs_disk(nullptr) {}
+    virtual ~FileSystem() {}
 
   private:
     struct SuperBlock {       // Superblock structure
@@ -56,8 +58,11 @@ class FileSystem {
   private:
     bool load_inode(size_t inumber, Inode* node);
 
+    bool mounted;
     Disk* fs_disk;
     SuperBlock MetaData;
     std::vector<bool> free_blocks;
     std::vector<int> inode_counter;
 };
+
+#endif

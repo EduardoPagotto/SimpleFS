@@ -1,6 +1,5 @@
-// disk.h: Disk emulator
-
-#pragma once
+#ifndef __DISK_HPP
+#define __DISK_HPP
 
 #include <stdlib.h>
 
@@ -59,3 +58,5 @@ class Disk {
     // @param	data	    Buffer to write from
     void write(int blocknum, char* data);
 };
+
+#endif
