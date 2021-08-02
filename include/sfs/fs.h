@@ -5,6 +5,7 @@
 #include "sfs/disk.h"
 
 #include <stdint.h>
+#include <vector>
 
 class FileSystem {
   public:
@@ -51,4 +52,12 @@ class FileSystem {
 
     ssize_t read(size_t inumber, char* data, size_t length, size_t offset);
     ssize_t write(size_t inumber, char* data, size_t length, size_t offset);
+
+  private:
+    bool load_inode(size_t inumber, Inode* node);
+
+    Disk* fs_disk;
+    SuperBlock MetaData;
+    std::vector<bool> free_blocks;
+    std::vector<int> inode_counter;
 };

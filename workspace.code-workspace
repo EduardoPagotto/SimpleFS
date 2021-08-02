@@ -5,5 +5,55 @@
 		}
 	],
 	"settings": {
+		"editor.minimap.enabled": false,
+		"editor.formatOnSave": true,
+		"cmake.configureOnOpen": true,
+		"C_Cpp.intelliSenseEngineFallback": "Enabled",
+		"C_Cpp.configurationWarnings": "Disabled",
+		"C_Cpp.intelliSenseEngine": "Tag Parser",
+		"C_Cpp.clang_format_path": "/usr/bin/clang-format",
+		"files.associations": {
+			"*.tcc": "cpp"
+		}
+	},
+	"tasks": {
+		"version": "2.0.0",
+		"tasks": [
+			{
+				"label": "build-cmake",
+				"type": "shell",
+				"command": "cd build && cmake .. && make"
+			}
+		]
+	},
+	"launch": {
+		"version": "0.2.0",
+		"configurations": [
+			{
+				"name": "debug",
+				"type": "cppdbg",
+				"request": "launch",
+				"program": "${workspaceRoot}/bin/sfssh",
+				"args": [
+					"data/image_5.raw",
+					"5"
+				],
+				"stopAtEntry": false,
+				"cwd": "${workspaceFolder}",
+				"environment": [],
+				"externalConsole": false,
+				"MIMode": "gdb",
+				"setupCommands": [
+					{
+						"description": "Habilitar a reformatação automática para gdb",
+						"text": "-enable-pretty-printing",
+						"ignoreFailures": true
+					}
+				],
+				"preLaunchTask": "build-cmake",
+				"miDebuggerPath": "/bin/gdb"
+			}
+		],
+		"compounds": []
 	}
 }
