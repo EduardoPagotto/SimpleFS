@@ -1,15 +1,13 @@
 // sfssh.cpp: Simple file system shell
 
-#include "sfs/disk.h"
-#include "sfs/fs.h"
-
+#include "sfs/disk.hpp"
+#include "sfs/fs.hpp"
 #include <sstream>
 #include <stdexcept>
-#include <string>
-
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <string>
 
 // Macros
 

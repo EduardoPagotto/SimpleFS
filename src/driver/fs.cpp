@@ -1,6 +1,6 @@
 // fs.cpp: File System
 
-#include "sfs/fs.h"
+#include "sfs/fs.hpp"
 
 #include <algorithm>
 #include <assert.h>

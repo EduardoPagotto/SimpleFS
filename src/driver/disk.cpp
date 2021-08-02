@@ -1,6 +1,6 @@
 // disk.cpp: disk emulator
 
-#include "sfs/disk.h"
+#include "sfs/disk.hpp"
 
 #include <stdexcept>
 

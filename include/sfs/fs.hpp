@@ -1,7 +1,7 @@
 #ifndef __FS_HPP
 #define __FS_HPP
 
-#include "sfs/disk.h"
+#include "sfs/disk.hpp"
 
 #include <stdint.h>
 #include <vector>
