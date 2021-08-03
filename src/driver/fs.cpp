@@ -1,6 +1,7 @@
 // fs.cpp: File System
 
 #include "sfs/fs.hpp"
+#include "sfs/sha256.hpp"
 
 #include <algorithm>
 #include <assert.h>
@@ -156,14 +157,33 @@ bool FileSystem::mount(Disk* disk) {
     Block block;
     disk->read(0, block.Data);
 
-    if (block.Super.MagicNumber != FileSystem::MAGIC_NUMBER)
+    if (block.Super.MagicNumber != MAGIC_NUMBER)
+        return false;
+    if (block.Super.InodeBlocks != std::ceil((block.Super.Blocks * 1.00) / 10))
+        return false;
+    if (block.Super.Inodes != (block.Super.InodeBlocks * INODES_PER_BLOCK))
+        return false;
+    if (block.Super.DirBlocks != (uint32_t)std::ceil((int(block.Super.Blocks) * 1.00) / 100))
         return false;
 
-    if (block.Super.InodeBlocks != (block.Super.Blocks > 10 ? block.Super.Blocks / 10 : 1))
-        return false;
+    if (block.Super.Protected) {
+        char pass[BUFSIZ], line[BUFSIZ]; // FIXME : merda!!!!
+        printf("Enter password: ");
+        if (fgets(line, BUFSIZ, stdin) == NULL) {
+            return false;
+        }
+        sscanf(line, "%s", pass);
+        if (sha256(std::string(pass)).compare(std::string(block.Super.PasswordHash)) != 0) {
+            printf("Password Failed. Exiting...\n");
+            return false;
+        }
+
+        printf("Disk Unlocked\n");
+    }
 
     disk->mount();
-    // Copy metadata
+    this->fs_disk = disk;
+
     MetaData = block.Super;
 
     // Allocate free block bitmap
@@ -209,7 +229,21 @@ bool FileSystem::mount(Disk* disk) {
         }
     }
 
-    this->fs_disk = disk;
+    dir_counter.resize(MetaData.DirBlocks, 0);
+
+    Block dirblock;
+    for (uint32_t dirs = 0; dirs < MetaData.DirBlocks; dirs++) {
+        disk->read(MetaData.Blocks - 1 - dirs, dirblock.Data);
+        for (uint32_t offset = 0; offset < FileSystem::DIR_PER_BLOCK; offset++) {
+            if (dirblock.Directories[offset].Valid == 1) {
+                dir_counter[dirs]++;
+            }
+        }
+        if (dirs == 0) {
+            curr_dir = dirblock.Directories[0];
+        }
+    }
+
     this->mounted = true;
     return true;
 }

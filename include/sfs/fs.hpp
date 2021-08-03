@@ -90,6 +90,9 @@ class FileSystem {
     SuperBlock MetaData;
     std::vector<bool> free_blocks;
     std::vector<int> inode_counter;
+
+    Directory curr_dir;
+    std::vector<uint32_t> dir_counter;
 };
 
 #endif

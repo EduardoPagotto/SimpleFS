@@ -3,7 +3,9 @@ cmake_minimum_required(VERSION 3.18.4)
 PROJECT(sfs)
 
 #define objetos a compilar
-set (SfsSource disk.cpp fs.cpp)
+set (SfsSource disk.cpp 
+               sha256.cpp
+               fs.cpp)
 
 #define os includes
 set (SfsInclude ${CMAKE_SOURCE_DIR}/include) # Raiz do projeto
