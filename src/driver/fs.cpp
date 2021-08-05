@@ -9,8 +9,6 @@
 #include <stdio.h>
 #include <string.h>
 
-// Debug file system -----------------------------------------------------------
-
 void FileSystem::debug(Disk* disk) {
     Block block;
 
@@ -58,8 +56,6 @@ void FileSystem::debug(Disk* disk) {
         }
     }
 }
-
-// Format file system ----------------------------------------------------------
 
 bool FileSystem::format(Disk* disk) {
 
@@ -129,13 +125,16 @@ bool FileSystem::format(Disk* disk) {
 
     struct Dirent temp;
     memset(&temp, 0, sizeof(temp));
+
     temp.inum = 0;
     temp.type = 0;
     temp.valid = 1;
     char tstr1[] = ".";
     char tstr2[] = "..";
+
     strcpy(temp.Name, tstr1);
     memcpy(&(root.Table[0]), &temp, sizeof(Dirent));
+
     strcpy(temp.Name, tstr2);
     memcpy(&(root.Table[1]), &temp, sizeof(Dirent));
 
@@ -146,14 +145,12 @@ bool FileSystem::format(Disk* disk) {
     return true;
 }
 
-// Mount file system -----------------------------------------------------------
-
 bool FileSystem::mount(Disk* disk) {
 
     if (disk->mounted())
         return false;
 
-    // Read superblock
+    // Le o Superblock e valida totalizadores
     Block block;
     disk->read(0, block.Data);
 
@@ -166,6 +163,7 @@ bool FileSystem::mount(Disk* disk) {
     if (block.Super.DirBlocks != (uint32_t)std::ceil((int(block.Super.Blocks) * 1.00) / 100))
         return false;
 
+    // se fs estiver protegido
     if (block.Super.Protected) {
         char pass[BUFSIZ], line[BUFSIZ]; // FIXME : merda!!!!
         printf("Enter password: ");
@@ -229,8 +227,8 @@ bool FileSystem::mount(Disk* disk) {
         }
     }
 
+    // Valida diretorio de arquivos
     dir_counter.resize(MetaData.DirBlocks, 0);
-
     Block dirblock;
     for (uint32_t dirs = 0; dirs < MetaData.DirBlocks; dirs++) {
         disk->read(MetaData.Blocks - 1 - dirs, dirblock.Data);
@@ -247,8 +245,6 @@ bool FileSystem::mount(Disk* disk) {
     this->mounted = true;
     return true;
 }
-
-// Create inode ----------------------------------------------------------------
 
 ssize_t FileSystem::create() {
     if (!mounted)
@@ -286,12 +282,8 @@ ssize_t FileSystem::create() {
 
 bool FileSystem::load_inode(size_t inumber, Inode* node) {
 
-    if (!mounted)
+    if (!mounted || (inumber > MetaData.Inodes) || (inumber < 0))
         return false;
-
-    if ((inumber > MetaData.Inodes) || (inumber < 0)) {
-        return false;
-    }
 
     Block block;
 

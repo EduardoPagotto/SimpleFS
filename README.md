@@ -16,3 +16,4 @@ A simple filesystem to understand things, probably to a RTOS in the future far f
 ### Refs: 
 - https://www3.nd.edu/~pbui/teaching/cse.30341.fa17/project06.html
 - https://rudradesai.in/SimpleFS/index.html
+- http://www.zedwood.com/article/cpp-sha256-function

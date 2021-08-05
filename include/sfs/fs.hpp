@@ -9,51 +9,49 @@
 class FileSystem {
   public:
     const static uint32_t MAGIC_NUMBER = 0xf0f03410;
-    const static uint32_t INODES_PER_BLOCK = 128;
+    const static uint32_t INODES_PER_BLOCK = Disk::BLOCK_SIZE / 32; // 128 to 4k block
     const static uint32_t POINTERS_PER_INODE = 5;
-    const static uint32_t POINTERS_PER_BLOCK = 1024;
+    const static uint32_t POINTERS_PER_BLOCK = Disk::BLOCK_SIZE / 4; // 1024; to 4k block
     // extra to dir
     const static uint32_t NAMESIZE = 16;
     const static uint32_t ENTRIES_PER_DIR = 7;
-    const static uint32_t DIR_PER_BLOCK = 8;
+    const static uint32_t DIR_PER_BLOCK = Disk::BLOCK_SIZE / 256; // 16 (**original 8 nao sei o motivo!!)
 
     FileSystem() : mounted(false), fs_disk(nullptr) {}
     virtual ~FileSystem() {}
 
   private:
-    struct SuperBlock {       // Superblock structure
-        uint32_t MagicNumber; // File system magic number
-        uint32_t Blocks;      // Number of blocks in file system
-        uint32_t InodeBlocks; // Number of blocks reserved for inodes
-        // dirs
-        uint32_t DirBlocks;
-        // normal
-        uint32_t Inodes; // Number of inodes in file system
-        // protect root
-        uint32_t Protected;
-        char PasswordHash[257];
-    };
-
-    struct Dirent {
-        uint8_t type;
-        uint8_t valid;
-        uint32_t inum;
-        char Name[NAMESIZE];
-    };
-
-    struct Directory {
-        uint16_t Valid;
-        uint32_t inum;
-        char Name[NAMESIZE];
-        Dirent Table[ENTRIES_PER_DIR];
-    };
+    struct SuperBlock {         // Superblock structure
+        uint32_t MagicNumber;   // File system magic number
+        uint32_t Blocks;        // Number of blocks in file system
+        uint32_t InodeBlocks;   // Number of blocks reserved for inodes
+        uint32_t Inodes;        // Number of inodes in file system
+        uint32_t DirBlocks;     // number of blocks to dir
+        uint32_t Protected;     // ??
+        char PasswordHash[257]; // root pass
+    };                          // Size 281 Bytes
 
     struct Inode {
         uint32_t Valid;                      // Whether or not inode is valid
         uint32_t Size;                       // Size of file
         uint32_t Direct[POINTERS_PER_INODE]; // Direct pointers
         uint32_t Indirect;                   // Indirect pointer
-    };
+    };                                       // size 32 Bytes
+
+    struct Dirent {
+        uint8_t type;
+        uint8_t valid;
+        uint32_t inum;
+        char Name[NAMESIZE];
+    }; // size 22 Bytes
+
+    struct Directory {
+        uint16_t Valid;
+        uint32_t inum;
+        char Name[NAMESIZE];
+        Dirent Table[ENTRIES_PER_DIR];
+        char reserv[80];
+    }; // Size 256 bytes **Size 176 Bytes original
 
     union Block {
         SuperBlock Super;                      // Superblock
@@ -61,7 +59,7 @@ class FileSystem {
         uint32_t Pointers[POINTERS_PER_BLOCK]; // Pointer block
         char Data[Disk::BLOCK_SIZE];           // Data block
         struct Directory Directories[FileSystem::DIR_PER_BLOCK];
-    };
+    }; // Size 4096
 
   public:
     static void debug(Disk* disk);
