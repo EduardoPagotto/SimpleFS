@@ -17,8 +17,8 @@ class FileSystem {
     const static uint32_t ENTRIES_PER_DIR = 7;
     const static uint32_t DIR_PER_BLOCK = Disk::BLOCK_SIZE / 256; // 16 (**original 8 nao sei o motivo!!)
 
-    FileSystem() : mounted(false), fs_disk(nullptr) {}
-    virtual ~FileSystem() {}
+    FileSystem();
+    virtual ~FileSystem();
 
   private:
     struct SuperBlock {         // Superblock structure
@@ -62,8 +62,8 @@ class FileSystem {
     }; // Size 4096
 
   public:
-    static void debug(Disk* disk);
-    static bool format(Disk* disk);
+    void debug(Disk* disk);
+    bool format(Disk* disk);
 
     bool mount(Disk* disk);
 
@@ -74,6 +74,9 @@ class FileSystem {
     ssize_t read(size_t inumber, char* data, size_t length, size_t offset);
     ssize_t write(size_t inumber, char* data, size_t length, size_t offset);
 
+    //---
+    bool touch(char name[FileSystem::NAMESIZE]);
+
   private:
     bool load_inode(size_t inumber, Inode* node);
 
@@ -83,14 +86,25 @@ class FileSystem {
     ssize_t write_ret(size_t inumber, Inode* node, int ret);
     void read_helper(uint32_t blocknum, int offset, size_t* length, char** data, char** ptr);
 
+    // //---
+    // bool touch(char name[FileSystem::NAMESIZE]);
+    FileSystem::Directory add_dir_entry(Directory dir, uint32_t inum, uint32_t type, char name[]);
+    void write_dir_back(Directory dir);
+
     bool mounted;
     Disk* fs_disk;
     SuperBlock MetaData;
     std::vector<bool> free_blocks;
+
+    // quantidade de inodes usados em cada block (cada posicao do array correponde a um bloco de inode)
     std::vector<int> inode_counter;
 
     Directory curr_dir;
     std::vector<uint32_t> dir_counter;
+
+    unsigned int startBlockIndirect;
+    unsigned int startBlockData;
+    unsigned int startBlockDirectory;
 };
 
 #endif

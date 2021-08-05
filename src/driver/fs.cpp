@@ -9,24 +9,39 @@
 #include <stdio.h>
 #include <string.h>
 
+#define streq(a, b) (strcmp((a), (b)) == 0) // FIXME: solucao idiota
+
+#define startBlockBoot 0 // FIXME: quando usar incrementar todos abaixo
+#define startBlockSuper 0
+#define startBlockInode 1
+
+FileSystem::FileSystem() : mounted(false), fs_disk(nullptr) {
+    startBlockIndirect = -1;
+    startBlockData = -1;
+    startBlockDirectory = -1;
+}
+
+FileSystem::~FileSystem() {}
+
 void FileSystem::debug(Disk* disk) {
-    Block block;
+    SuperBlock super;
 
     // Read Superblock
-    disk->read(0, block.Data);
+    disk->read(startBlockSuper, (char*)&super);
 
     printf("SuperBlock:\n");
-    printf("    %u blocks\n", block.Super.Blocks);
-    printf("    %u inode blocks\n", block.Super.InodeBlocks);
-    printf("    %u inodes\n", block.Super.Inodes);
+    printf("    %u blocks\n", super.Blocks);
+    printf("    %u inode blocks\n", super.InodeBlocks);
+    printf("    %u inodes\n", super.Inodes);
 
-    if (block.Super.MagicNumber != MAGIC_NUMBER)
+    if (super.MagicNumber != MAGIC_NUMBER)
         return;
 
     int ii = 0;
 
     // Read Inode blocks
-    for (uint32_t i = 1; i <= block.Super.InodeBlocks; i++) {
+    Block block;
+    for (uint32_t i = startBlockInode; i <= super.InodeBlocks; i++) {
         disk->read(i, block.Data);
         for (uint32_t j = 0; j < INODES_PER_BLOCK; j++) {
             if (block.Inodes[j].Valid) {
@@ -62,7 +77,7 @@ bool FileSystem::format(Disk* disk) {
     if (disk->mounted())
         return false;
 
-    // Cria SuperBlock no bloco 0
+    // Cria SuperBlock
     Block block;
     memset(&block, 0, sizeof(Block));
 
@@ -73,12 +88,15 @@ bool FileSystem::format(Disk* disk) {
     block.Super.DirBlocks = (uint32_t)std::ceil((int(block.Super.Blocks) * 1.00) / 100);
     block.Super.Protected = 0;                // Zera campos segurança
     memset(block.Super.PasswordHash, 0, 257); // Zera hash root
-    disk->write(0, block.Data);
+    disk->write(startBlockSuper, block.Data);
+
+    // define inicio de cada grupo de blocos
+    startBlockIndirect = startBlockInode + block.Super.InodeBlocks;
+    startBlockData = startBlockIndirect + 1; // TODO: melhorar
+    startBlockDirectory = block.Super.Blocks - block.Super.DirBlocks;
 
     // Zera Blocos de Inodes a partir do SuperBlock com 1 bloco ou 10% de uso
-    uint32_t begin = 1;
-    uint32_t end = block.Super.InodeBlocks + 1;
-    for (uint32_t i = begin; i < end; i++) {
+    for (uint32_t i = startBlockInode; i < startBlockIndirect; i++) {
         Block inodeBlock;
         for (uint32_t j = 0; j < FileSystem::INODES_PER_BLOCK; j++) {
             inodeBlock.Inodes[j].Valid = false;
@@ -93,19 +111,24 @@ bool FileSystem::format(Disk* disk) {
         disk->write(i, inodeBlock.Data);
     }
 
+    // Zera Blocos de indireto
+    for (uint32_t i = startBlockIndirect; i < startBlockData; i++) {
+        Block DataBlock;
+        for (uint32_t j = 0; j < FileSystem::POINTERS_PER_BLOCK; j++)
+            DataBlock.Pointers[j] = 0;
+
+        disk->write(i, DataBlock.Data);
+    }
+
     // Zera Bloco de Dados depois dos blocos de inode
-    begin = end;
-    end = block.Super.Blocks - block.Super.DirBlocks;
-    for (uint32_t i = begin; i < end; i++) {
+    for (uint32_t i = startBlockData; i < startBlockDirectory; i++) {
         Block DataBlock;
         memset(DataBlock.Data, 0, Disk::BLOCK_SIZE);
         disk->write(i, DataBlock.Data);
     }
 
     // Zera Bloco Diretorio nos ultimos blocos com 1 ou 1% de uso
-    begin = end;
-    end = block.Super.Blocks;
-    for (uint32_t i = begin; i < end; i++) {
+    for (uint32_t i = startBlockDirectory; i < block.Super.Blocks; i++) {
         Block DataBlock;
         Directory dir;
         dir.inum = -1;
@@ -140,7 +163,7 @@ bool FileSystem::format(Disk* disk) {
 
     Block Dirblock;
     memcpy(&(Dirblock.Directories[0]), &root, sizeof(root));
-    disk->write(block.Super.Blocks - 1, Dirblock.Data);
+    disk->write(startBlockDirectory, Dirblock.Data);
 
     return true;
 }
@@ -152,16 +175,24 @@ bool FileSystem::mount(Disk* disk) {
 
     // Le o Superblock e valida totalizadores
     Block block;
-    disk->read(0, block.Data);
+    disk->read(startBlockSuper, block.Data);
 
     if (block.Super.MagicNumber != MAGIC_NUMBER)
         return false;
+
     if (block.Super.InodeBlocks != std::ceil((block.Super.Blocks * 1.00) / 10))
         return false;
+
     if (block.Super.Inodes != (block.Super.InodeBlocks * INODES_PER_BLOCK))
         return false;
+
     if (block.Super.DirBlocks != (uint32_t)std::ceil((int(block.Super.Blocks) * 1.00) / 100))
         return false;
+
+    // define inicio de cada grupo de blocos
+    startBlockIndirect = startBlockInode + block.Super.InodeBlocks;
+    startBlockData = startBlockIndirect + 1; // TODO: melhorar
+    startBlockDirectory = block.Super.Blocks - block.Super.DirBlocks;
 
     // se fs estiver protegido
     if (block.Super.Protected) {
@@ -188,14 +219,19 @@ bool FileSystem::mount(Disk* disk) {
     this->free_blocks.resize(MetaData.Blocks, false);
     this->inode_counter.resize(MetaData.InodeBlocks, 0);
 
-    free_blocks[0] = true;
+    // marca blocos de boot, super, inode, indirect
+    for (uint32_t i = startBlockBoot; i < startBlockData; i++)
+        free_blocks[i] = true;
 
-    for (uint32_t i = 1; i <= MetaData.InodeBlocks; i++) {
+    for (uint32_t i = startBlockInode; i < startBlockIndirect; i++) {
+
+        uint32_t indiceBlocoData = i - startBlockInode;
+
         disk->read(i, block.Data);
 
         for (uint32_t j = 0; j < INODES_PER_BLOCK; j++) {
             if (block.Inodes[j].Valid) {
-                this->inode_counter[i - 1]++;
+                this->inode_counter[indiceBlocoData]++;
 
                 if (block.Inodes[j].Valid)
                     free_blocks[i] = true;
@@ -231,7 +267,10 @@ bool FileSystem::mount(Disk* disk) {
     dir_counter.resize(MetaData.DirBlocks, 0);
     Block dirblock;
     for (uint32_t dirs = 0; dirs < MetaData.DirBlocks; dirs++) {
-        disk->read(MetaData.Blocks - 1 - dirs, dirblock.Data);
+
+        uint32_t dir_block = startBlockDirectory + dirs;
+        disk->read(dir_block, dirblock.Data);
+
         for (uint32_t offset = 0; offset < FileSystem::DIR_PER_BLOCK; offset++) {
             if (dirblock.Directories[offset].Valid == 1) {
                 dir_counter[dirs]++;
@@ -251,10 +290,11 @@ ssize_t FileSystem::create() {
         return false;
 
     Block block;
-    this->fs_disk->read(0, block.Data);
+    for (uint32_t indexBlock = startBlockInode; indexBlock < startBlockDirectory; indexBlock++) {
 
-    for (uint32_t indexBlock = 1; indexBlock <= MetaData.InodeBlocks; indexBlock++) {
-        if (inode_counter[indexBlock - 1] == INODES_PER_BLOCK)
+        uint32_t indexBlockInode = startBlockInode - indexBlock;
+
+        if (inode_counter[indexBlockInode] == INODES_PER_BLOCK)
             continue;
         else
             this->fs_disk->read(indexBlock, block.Data);
@@ -268,11 +308,11 @@ ssize_t FileSystem::create() {
                     block.Inodes[indexINode].Direct[indexDirect] = 0;
                 }
                 free_blocks[indexBlock] = true;
-                inode_counter[indexBlock - 1]++;
+                inode_counter[indexBlockInode]++;
 
                 this->fs_disk->write(indexBlock, block.Data);
 
-                return (((indexBlock - 1) * INODES_PER_BLOCK) + indexINode);
+                return (((indexBlockInode)*INODES_PER_BLOCK) + indexINode);
             }
         }
     }
@@ -533,6 +573,7 @@ ssize_t FileSystem::write(size_t inumber, char* data, size_t length, size_t offs
     int read = 0;
     int orig_offset = offset;
 
+    // verifica se arquivo é maior do que a capacidade total maxima de armazenamento
     if (length + offset > (POINTERS_PER_BLOCK + POINTERS_PER_INODE) * Disk::BLOCK_SIZE) {
         return -1;
     }
@@ -645,4 +686,74 @@ ssize_t FileSystem::write(size_t inumber, char* data, size_t length, size_t offs
     }
 
     return -1;
+}
+
+// FIXME: abaixo sera em outra classe
+
+// Necessario para criar arquivo
+
+FileSystem::Directory FileSystem::add_dir_entry(Directory dir, uint32_t inum, uint32_t type, char name[]) {
+    Directory tempdir = dir;
+
+    uint32_t idx = 0;
+    for (; idx < FileSystem::ENTRIES_PER_DIR; idx++) {
+        if (tempdir.Table[idx].valid == 0) {
+            break;
+        }
+    }
+
+    if (idx == FileSystem::ENTRIES_PER_DIR) {
+        printf("Directory entry limit reached..exiting\n");
+        tempdir.Valid = 0;
+        return tempdir;
+    }
+
+    tempdir.Table[idx].inum = inum;
+    tempdir.Table[idx].type = type;
+    tempdir.Table[idx].valid = 1;
+    strcpy(tempdir.Table[idx].Name, name);
+
+    return tempdir;
+}
+
+void FileSystem::write_dir_back(Directory dir) {
+    uint32_t block_idx = (dir.inum / FileSystem::DIR_PER_BLOCK);
+    uint32_t block_offset = (dir.inum % FileSystem::DIR_PER_BLOCK);
+
+    Block block;
+    fs_disk->read(MetaData.Blocks - 1 - block_idx, block.Data);
+    block.Directories[block_offset] = dir;
+
+    fs_disk->write(MetaData.Blocks - 1 - block_idx, block.Data);
+}
+
+bool FileSystem::touch(char name[FileSystem::NAMESIZE]) {
+    if (!mounted) {
+        return false;
+    }
+
+    for (uint32_t offset = 0; offset < FileSystem::ENTRIES_PER_DIR; offset++) {
+        if (curr_dir.Table[offset].valid) {
+            if (streq(curr_dir.Table[offset].Name, name)) {
+                printf("File already exists\n");
+                return false;
+            }
+        }
+    }
+    ssize_t new_node_idx = FileSystem::create();
+    if (new_node_idx == -1) {
+        printf("Error creating new inode\n");
+        return false;
+    }
+
+    Directory temp = add_dir_entry(curr_dir, new_node_idx, 1, name);
+    if (temp.Valid == 0) {
+        printf("Error adding new file\n");
+        return false;
+    }
+    curr_dir = temp;
+
+    write_dir_back(curr_dir);
+
+    return true;
 }

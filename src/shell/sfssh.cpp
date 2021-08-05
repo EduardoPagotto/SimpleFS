@@ -26,6 +26,8 @@ void do_stat(Disk& disk, FileSystem& fs, int args, char* arg1, char* arg2);
 void do_copyin(Disk& disk, FileSystem& fs, int args, char* arg1, char* arg2);
 void do_help(Disk& disk, FileSystem& fs, int args, char* arg1, char* arg2);
 
+void do_touch(FileSystem& fs, char* path);
+
 bool copyout(FileSystem& fs, size_t inumber, const char* path);
 bool copyin(FileSystem& fs, const char* path, size_t inumber);
 
@@ -80,6 +82,11 @@ int main(int argc, char* argv[]) {
             do_stat(disk, fs, args, arg1, arg2);
         } else if (streq(cmd, "copyin")) {
             do_copyin(disk, fs, args, arg1, arg2);
+
+        } else if (streq(cmd, "touch")) {
+
+            do_touch(fs, arg1);
+
         } else if (streq(cmd, "help")) {
             do_help(disk, fs, args, arg1, arg2);
         } else if (streq(cmd, "exit") || streq(cmd, "quit")) {
@@ -275,4 +282,19 @@ bool copyin(FileSystem& fs, const char* path, size_t inumber) {
     printf("%lu bytes copied\n", offset);
     fclose(stream);
     return true;
+}
+
+void do_touch(FileSystem& fs, char* path) {
+
+    char name[FileSystem::NAMESIZE] = {0};
+
+    strcpy(name, path);
+
+    bool ret = fs.touch(name);
+    if (ret) {
+        printf("ok\n");
+        return;
+    }
+
+    printf("Falha ao criar arquivo\n");
 }
