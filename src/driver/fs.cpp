@@ -503,7 +503,8 @@ uint32_t FileSystem::allocate_block() {
     if (!mounted)
         return 0;
 
-    for (uint32_t i = MetaData.InodeBlocks + 1; i < MetaData.Blocks; i++) {
+    // Procura bloco livre
+    for (uint32_t i = startBlockData; i < MetaData.Blocks; i++) {
         if (free_blocks[i] == 0) {
             free_blocks[i] = true;
             return i;
@@ -534,13 +535,13 @@ ssize_t FileSystem::write_ret(size_t inumber, Inode* node, int ret) {
     if (!mounted)
         return -1;
 
-    int i = inumber / INODES_PER_BLOCK;
+    int i = (inumber / INODES_PER_BLOCK) + startBlockInode;
     int j = inumber % INODES_PER_BLOCK;
 
     Block block;
-    fs_disk->read(i + 1, block.Data);
+    fs_disk->read(i, block.Data);
     block.Inodes[j] = *node;
-    fs_disk->write(i + 1, block.Data);
+    fs_disk->write(i, block.Data);
 
     return (ssize_t)ret;
 }
@@ -579,6 +580,7 @@ ssize_t FileSystem::write(size_t inumber, char* data, size_t length, size_t offs
     }
 
     if (!load_inode(inumber, &node)) {
+        // entradas consecutivas com offset != 0 inode sera atualizado
         node.Valid = true;
         node.Size = length + offset;
         for (uint32_t ii = 0; ii < POINTERS_PER_INODE; ii++) {
@@ -588,34 +590,45 @@ ssize_t FileSystem::write(size_t inumber, char* data, size_t length, size_t offs
         inode_counter[inumber / INODES_PER_BLOCK]++;
         free_blocks[inumber / INODES_PER_BLOCK + 1] = true;
     } else {
+        // primeira entrada com offset 0, inode sera preenchido pela primeira vez
         node.Size = std::max((size_t)node.Size, length + offset);
     }
 
     if (offset < POINTERS_PER_INODE * Disk::BLOCK_SIZE) {
+        // arquivo cabe em 1 a 5 blocos (sem indireção)
         int direct_node = offset / Disk::BLOCK_SIZE;
         offset %= Disk::BLOCK_SIZE;
 
         if (!check_allocation(&node, read, orig_offset, node.Direct[direct_node], false, indirect)) {
             return write_ret(inumber, &node, read);
         }
+        // copia dados do buffer de entrada para o bloco no fs (direct_node)
         read_buffer(offset, &read, length, data, node.Direct[direct_node++]);
 
         if (read == length)
+            // dados copiados na primeira passada, atualiza o inode
             return write_ret(inumber, &node, length);
         else {
+
+            // continua a escrever nos blocos diretos
             for (int i = direct_node; i < (int)POINTERS_PER_INODE; i++) {
                 if (!check_allocation(&node, read, orig_offset, node.Direct[direct_node], false, indirect)) {
                     return write_ret(inumber, &node, read);
                 }
+                // copia dados do buffer de entrada para o bloco no fs (direct_node)
                 read_buffer(0, &read, length, data, node.Direct[direct_node++]);
 
+                // dados copiados em todas as passadas, atualiza o inode
                 if (read == length)
                     return write_ret(inumber, &node, length);
             }
 
+            // se indirect ja foi instanciado
             if (node.Indirect)
                 fs_disk->read(node.Indirect, indirect.Data);
             else {
+
+                // primento entrada do indirect
                 if (!check_allocation(&node, read, orig_offset, node.Indirect, false, indirect)) {
                     return write_ret(inumber, &node, read);
                 }
@@ -720,11 +733,14 @@ void FileSystem::write_dir_back(Directory dir) {
     uint32_t block_idx = (dir.inum / FileSystem::DIR_PER_BLOCK);
     uint32_t block_offset = (dir.inum % FileSystem::DIR_PER_BLOCK);
 
+    uint32_t iBlock = startBlockDirectory + block_idx;
+
     Block block;
-    fs_disk->read(MetaData.Blocks - 1 - block_idx, block.Data);
+    fs_disk->read(iBlock, block.Data);
+
     block.Directories[block_offset] = dir;
 
-    fs_disk->write(MetaData.Blocks - 1 - block_idx, block.Data);
+    fs_disk->write(iBlock, block.Data);
 }
 
 bool FileSystem::touch(char name[FileSystem::NAMESIZE]) {
@@ -732,6 +748,7 @@ bool FileSystem::touch(char name[FileSystem::NAMESIZE]) {
         return false;
     }
 
+    // Procura no diretorio corrente se nao existe arquivo com mesmo nome
     for (uint32_t offset = 0; offset < FileSystem::ENTRIES_PER_DIR; offset++) {
         if (curr_dir.Table[offset].valid) {
             if (streq(curr_dir.Table[offset].Name, name)) {
@@ -740,12 +757,15 @@ bool FileSystem::touch(char name[FileSystem::NAMESIZE]) {
             }
         }
     }
+
+    // Aloca um inode para os dados do arquivo
     ssize_t new_node_idx = FileSystem::create();
     if (new_node_idx == -1) {
         printf("Error creating new inode\n");
         return false;
     }
 
+    // cria uma nova entrada no diretorio corrente
     Directory temp = add_dir_entry(curr_dir, new_node_idx, 1, name);
     if (temp.Valid == 0) {
         printf("Error adding new file\n");
@@ -753,6 +773,7 @@ bool FileSystem::touch(char name[FileSystem::NAMESIZE]) {
     }
     curr_dir = temp;
 
+    // escreve no diretorio no disco
     write_dir_back(curr_dir);
 
     return true;
