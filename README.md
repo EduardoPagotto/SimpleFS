@@ -16,15 +16,15 @@ A simple filesystem to understand things, probably to a RTOS in the future far f
 ## format:
 
 test
- super | inode | indirect | data | directory
-:-----:|:-----:|:--------:|:----:|:---------:
- 0     | 1     | 2        | 3    | 4
+super  |inode  |data   |directory
+:-----:|:-----:|:-----:|:--------:
+0      |1      |2->3   |4        
 
 
 boot
-boot | super | inode | indirect | data | directory
-:---:|:-----:|:-----:|:--------:|:----:|:---------:
-0    | 1     | 2     | 3        | 4    | 5
+boot | super | inode | data   | directory
+:---:|:-----:|:-----:|:------:|:---------:
+0    |1      |2      |3       |4
 
 
 ### Refs: 

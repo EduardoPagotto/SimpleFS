@@ -102,7 +102,6 @@ class FileSystem {
     Directory curr_dir;
     std::vector<uint32_t> dir_counter;
 
-    unsigned int startBlockIndirect;
     unsigned int startBlockData;
     unsigned int startBlockDirectory;
 };
