@@ -74,20 +74,71 @@ class FileSystem {
     ssize_t read(size_t inumber, char* data, size_t length, size_t offset);
     ssize_t write(size_t inumber, char* data, size_t length, size_t offset);
 
-    //---
+    /**
+     * @brief Escreve nome de arquivo na tabela de diretorio corrente
+     *
+     * @param name  Nome do arquivo
+     * @return true entrada no diretorio escrita com sucesso
+     * @return false falha na escrita de diretorio
+     */
     bool touch(char name[FileSystem::NAMESIZE]);
 
   private:
+    /**
+     * @brief Retorna iNode carregado  usando numero de iNode
+     *
+     * @param inumber numero do iNode
+     * @param node iNode encontrado
+     * @return true iNode valido
+     * @return false iNode invalido
+     */
     bool load_inode(size_t inumber, Inode* node);
 
+    /**
+     * @brief Retorna o numero do proximo bloco livre se existir
+     *
+     * @return uint32_t numero do bloco ou 0 se não existir espaco livre
+     */
     uint32_t allocate_block();
+
+    /**
+     * @brief Aloca um bloco livre e retorna o mesmo por referencia em blocknum
+     *
+     * @param node iNode do bloco de dados a ser gravado/Lido (para no erro apenas)
+     * @param read total a ser processado (para no erro apenas)
+     * @param orig_offset offset a ser processado (para no erro apenas)
+     * @param blocknum ponteiro de retorno do bloco livre a ser usado
+     * @param write_indirect false para escrita direta (para no erro apenas)
+     * @param indirect bloco de indireto (para no erro apenas)
+     * @return true Bloco libre encontrado
+     * @return false bloco livre não existe (para erro)
+     */
     bool check_allocation(Inode* node, int read, int orig_offset, uint32_t& blocknum, bool write_indirect, Block indirect);
+
+    /**
+     * @brief Grava buffer de dados no bloco
+     *
+     * @param offset posicao inicial a ser gravada no bloco
+     * @param read ponteiro da posicao de escrita nobloco (retorna o maximo escrito)
+     * @param length posicao maxima a ser gravado no bloco
+     * @param data buffer de dados a ser gravada
+     * @param blocknum numero do bloco a ser gravado
+     */
     void read_buffer(int offset, int* read, int length, char* data, uint32_t blocknum);
+
+    /**
+     * @brief Escreve o Inode no disco
+     *
+     * @param inumber numero do inode
+     * @param node ponteiro do node com o conteudo do node a ser gravado
+     * @param ret tamanho em bytes
+     * @return ssize_t valor do "ret"
+     */
     ssize_t write_ret(size_t inumber, Inode* node, int ret);
+
     void read_helper(uint32_t blocknum, int offset, size_t* length, char** data, char** ptr);
 
-    // //---
-    // bool touch(char name[FileSystem::NAMESIZE]);
+    //--- diretorios
     FileSystem::Directory add_dir_entry(Directory dir, uint32_t inum, uint32_t type, char name[]);
     void write_dir_back(Directory dir);
 

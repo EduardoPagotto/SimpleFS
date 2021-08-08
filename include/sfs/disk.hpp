@@ -19,7 +19,7 @@ class Disk {
 
   public:
     // Number of bytes per block
-    const static size_t BLOCK_SIZE = 512; // 4096;
+    const static size_t BLOCK_SIZE = 1024; // 4096;
 
     // Default constructor
     Disk() : FileDescriptor(0), Blocks(0), Reads(0), Writes(0), Mounts(0) {}

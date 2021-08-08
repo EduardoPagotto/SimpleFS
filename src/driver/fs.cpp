@@ -318,24 +318,35 @@ ssize_t FileSystem::create() {
 
 bool FileSystem::load_inode(size_t inumber, Inode* node) {
 
+    // valida range
     if (!mounted || (inumber > MetaData.Inodes) || (inumber < 0))
         return false;
 
+    // encontra o indice do iNode no vetor de inodes
     uint32_t indiceInodeLocal = inumber / INODES_PER_BLOCK;
+
+    // Valida se bloco de iNode nao esta vazio no indice de Inodes
     if (this->inode_counter[indiceInodeLocal]) {
 
         Block block;
 
+        // Encontra o Bloco de iNode Correto
         uint32_t iBlock = indiceInodeLocal + startBlockInode;
+
+        // Encontra o indice de Inode dentro do Bloco encontrado
         int indexINode = inumber % INODES_PER_BLOCK;
 
+        // Le o bloco de iNode Inteiro
         fs_disk->read(iBlock, block.Data);
+
+        // Se iNode estiver valido para uso carregar na variavel de retorno por ref
         if (block.Inodes[indexINode].Valid) {
             *node = block.Inodes[indexINode];
             return true;
         }
     }
 
+    // iNode não é Valido
     return false;
 }
 
@@ -356,7 +367,7 @@ bool FileSystem::remove(size_t inumber) {
         uint32_t iBlock = indiceInodeLocal + startBlockInode;
 
         if (!(--inode_counter[indiceInodeLocal])) {
-            this->free_blocks[iBlock] = false; // FIXME: merda aqui !!!!
+            this->free_blocks[iBlock] = false;
         }
 
         for (uint32_t i = 0; i < POINTERS_PER_INODE; i++) {
@@ -504,7 +515,7 @@ uint32_t FileSystem::allocate_block() {
         return 0;
 
     // Procura bloco livre
-    for (uint32_t i = startBlockData; i < MetaData.Blocks; i++) {
+    for (uint32_t i = startBlockData; i < startBlockDirectory; i++) {
         if (free_blocks[i] == 0) {
             free_blocks[i] = true;
             return i;
@@ -535,14 +546,17 @@ ssize_t FileSystem::write_ret(size_t inumber, Inode* node, int ret) {
     if (!mounted)
         return -1;
 
+    // encocntra bloco de posicao do inode correspondente
     int i = (inumber / INODES_PER_BLOCK) + startBlockInode;
     int j = inumber % INODES_PER_BLOCK;
 
+    // Le o bloco inteiro e grava os novos dados do inode em sua posicao
     Block block;
     fs_disk->read(i, block.Data);
     block.Inodes[j] = *node;
     fs_disk->write(i, block.Data);
 
+    // TODO: melhorar
     return (ssize_t)ret;
 }
 
@@ -600,13 +614,14 @@ ssize_t FileSystem::write(size_t inumber, char* data, size_t length, size_t offs
         offset %= Disk::BLOCK_SIZE;
 
         if (!check_allocation(&node, read, orig_offset, node.Direct[direct_node], false, indirect)) {
+            // falhou em alocar todo o espaço grava apenas o que conseguiu
             return write_ret(inumber, &node, read);
         }
         // copia dados do buffer de entrada para o bloco no fs (direct_node)
         read_buffer(offset, &read, length, data, node.Direct[direct_node++]);
 
         if (read == length)
-            // dados copiados na primeira passada, atualiza o inode
+            // atualiza inode com dados gravados e sai da funcao
             return write_ret(inumber, &node, length);
         else {
 
@@ -628,7 +643,7 @@ ssize_t FileSystem::write(size_t inumber, char* data, size_t length, size_t offs
                 fs_disk->read(node.Indirect, indirect.Data);
             else {
 
-                // primento entrada do indirect
+                // Aloca e formata bloco de indirecao
                 if (!check_allocation(&node, read, orig_offset, node.Indirect, false, indirect)) {
                     return write_ret(inumber, &node, read);
                 }
@@ -659,32 +674,43 @@ ssize_t FileSystem::write(size_t inumber, char* data, size_t length, size_t offs
         int indirect_node = offset / Disk::BLOCK_SIZE;
         offset %= Disk::BLOCK_SIZE;
 
+        // Se Node indirect ja esta instanciado ler bloco de dados do mesmo
         if (node.Indirect)
             fs_disk->read(node.Indirect, indirect.Data);
         else {
+            // primeira entrado do node indirect alocar bloco para indirect
             if (!check_allocation(&node, read, orig_offset, node.Indirect, false, indirect)) {
                 return write_ret(inumber, &node, read);
             }
+
+            // le bloco com dados do indirect
             fs_disk->read(node.Indirect, indirect.Data);
 
+            // Limpa ponteiros dentro de indirect
             for (int i = 0; i < (int)POINTERS_PER_BLOCK; i++) {
                 indirect.Pointers[i] = 0;
             }
         }
 
+        // Aloca novo bloco para dados e coloca indice do iNode no vetor de indirect
         if (!check_allocation(&node, read, orig_offset, indirect.Pointers[indirect_node], true, indirect)) {
             return write_ret(inumber, &node, read);
         }
+
+        // escreve dados no bloco
         read_buffer(offset, &read, length, data, indirect.Pointers[indirect_node++]);
 
         if (read == length) {
+            // se dados cabem escreve bloco do indirect e atualiza iNode do arquivo
             fs_disk->write(node.Indirect, indirect.Data);
             return write_ret(inumber, &node, length);
         } else {
             for (int j = indirect_node; j < (int)POINTERS_PER_BLOCK; j++) {
+                // Aloca novo bloco
                 if (!check_allocation(&node, read, orig_offset, indirect.Pointers[j], true, indirect)) {
                     return write_ret(inumber, &node, read);
                 }
+                // escreve dados no bloco
                 read_buffer(0, &read, length, data, indirect.Pointers[j]);
 
                 if (read == length) {
