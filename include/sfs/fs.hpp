@@ -31,18 +31,15 @@ class FileSystem {
     };                          // Size 281 Bytes
 
     struct Inode {
-        uint32_t Valid;                      // Whether or not inode is valid
+        uint16_t mode;                       // tttt000r - wxrwxrwx //  01FF
+        uint16_t bonds;                      // num of link
         uint32_t Size;                       // Size of file
         uint32_t Direct[POINTERS_PER_INODE]; // Direct pointers
         uint32_t Indirect;                   // Indirect pointer
-    };                                       // size 32 Bytes
+        // uint32_t Indirect2;
+    }; // size 32 Bytes
 
-    struct Dirent {
-        uint8_t type;
-        uint32_t inum;
-    }; // size 5 Bytes
-
-    struct Directory {
+    struct DirEntry {
         uint32_t inum;
         char Name[NAMESIZE];
     }; // 32
@@ -52,7 +49,7 @@ class FileSystem {
         Inode Inodes[INODES_PER_BLOCK];        // Inode block
         uint32_t Pointers[POINTERS_PER_BLOCK]; // Pointer block
         char Data[Disk::BLOCK_SIZE];           // Data block
-        struct Directory Directories[FileSystem::DIR_PER_BLOCK];
+        struct DirEntry Directories[FileSystem::DIR_PER_BLOCK];
     }; // Size 4096
 
   public:
@@ -133,8 +130,8 @@ class FileSystem {
     void read_helper(uint32_t blocknum, int offset, size_t* length, char** data, char** ptr);
 
     //--- diretorios
-    FileSystem::Directory add_dir_entry(Directory dir, uint32_t inum, uint32_t type, char name[]);
-    void write_dir_back(Directory dir);
+    bool add_dir_entry(const uint32_t& nodeId, char name[], Block* dirBlock);
+    // void write_dir_back(Directory dir);
 
     bool mounted;
     Disk* fs_disk;
@@ -144,7 +141,7 @@ class FileSystem {
     // quantidade de inodes usados em cada block (cada posicao do array correponde a um bloco de inode)
     std::vector<int> inode_counter;
 
-    Directory curr_dir;
+    uint32_t curr_dir;
     std::vector<uint32_t> dir_counter;
 
     unsigned int startBlockData;
