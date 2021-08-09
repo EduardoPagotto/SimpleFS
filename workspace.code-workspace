@@ -35,8 +35,8 @@
 				"request": "launch",
 				"program": "${workspaceRoot}/bin/sfssh",
 				"args": [
-					"data/image_2880.raw",
-					"2880"
+					"data/image_5.raw",
+					"5"
 				],
 				"stopAtEntry": false,
 				"cwd": "${workspaceFolder}",

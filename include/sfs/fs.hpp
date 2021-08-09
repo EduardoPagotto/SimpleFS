@@ -13,9 +13,8 @@ class FileSystem {
     const static uint32_t POINTERS_PER_INODE = 5;
     const static uint32_t POINTERS_PER_BLOCK = Disk::BLOCK_SIZE / 4; // 1024; to 4k block
     // extra to dir
-    const static uint32_t NAMESIZE = 16;
-    const static uint32_t ENTRIES_PER_DIR = 7;
-    const static uint32_t DIR_PER_BLOCK = Disk::BLOCK_SIZE / 256; // 16 (**original 8 nao sei o motivo!!)
+    const static uint32_t NAMESIZE = 28;                         // 16;
+    const static uint32_t DIR_PER_BLOCK = Disk::BLOCK_SIZE / 32; // 256; // 16 (**original 8 nao sei o motivo!!)
 
     FileSystem();
     virtual ~FileSystem();
@@ -26,7 +25,7 @@ class FileSystem {
         uint32_t Blocks;        // Number of blocks in file system
         uint32_t InodeBlocks;   // Number of blocks reserved for inodes
         uint32_t Inodes;        // Number of inodes in file system
-        uint32_t DirBlocks;     // number of blocks to dir
+        uint32_t MapBlocks;     // number of blocks to dir
         uint32_t Protected;     // ??
         char PasswordHash[257]; // root pass
     };                          // Size 281 Bytes
@@ -40,18 +39,13 @@ class FileSystem {
 
     struct Dirent {
         uint8_t type;
-        uint8_t valid;
         uint32_t inum;
-        char Name[NAMESIZE];
-    }; // size 22 Bytes
+    }; // size 5 Bytes
 
     struct Directory {
-        uint16_t Valid;
         uint32_t inum;
         char Name[NAMESIZE];
-        Dirent Table[ENTRIES_PER_DIR];
-        char reserv[80];
-    }; // Size 256 bytes **Size 176 Bytes original
+    }; // 32
 
     union Block {
         SuperBlock Super;                      // Superblock
@@ -154,7 +148,7 @@ class FileSystem {
     std::vector<uint32_t> dir_counter;
 
     unsigned int startBlockData;
-    unsigned int startBlockDirectory;
+    unsigned int startBlockMapFree;
 };
 
 #endif
