@@ -11,28 +11,28 @@
 #define FS_NAMESIZE 28                          // 16;
 #define FS_DIR_PER_BLOCK (DISK_BLOCK_SIZE / 32) // 256; // 16 (**original 8 nao sei o motivo!!)
 
-struct SuperBlock {         // Superblock structure
-    uint32_t nMagic;        // File system magic number
-    uint32_t nBlocks;       // Number of blocks in file system
-    uint32_t nInodeBlocks;  // Number of blocks reserved for inodes
-    uint32_t nInodes;       // Number of inodes in file system
-    uint32_t MapBlocks;     // number of blocks to dir
-    uint32_t Protected;     // ??
-    char PasswordHash[257]; // root pass
-};                          // Size 281 Bytes
+struct SuperBlock {        // Superblock structure
+    uint32_t nMagic;       // File system magic number
+    uint32_t nBlocks;      // Number of blocks in file system
+    uint32_t nInodeBlocks; // Number of blocks reserved for inodes
+    uint32_t nInodes;      // Number of inodes in file system
+    uint32_t nMapBlocks;   // number of blocks to dir
+    uint32_t Protected;    // ??
+    char szPassHash[257];  // root pass
+};                         // Size 281 Bytes
 
 struct Inode {
     uint16_t mode;                          // tttt000r - wxrwxrwx //  01FF
     uint16_t bonds;                         // num of link
-    uint32_t Size;                          // Size of file
-    uint32_t Direct[FS_POINTERS_PER_INODE]; // Direct pointers
-    uint32_t Indirect;                      // Indirect pointer
+    uint32_t size;                          // Size of file
+    uint32_t direct[FS_POINTERS_PER_INODE]; // Direct pointers
+    uint32_t indirect;                      // indirect pointer
     // uint32_t Indirect2;
 }; // size 32 Bytes
 
 struct DirEntry {
     uint32_t inum;
-    char Name[FS_NAMESIZE];
+    char szName[FS_NAMESIZE];
 }; // 32
 
 union Block {
