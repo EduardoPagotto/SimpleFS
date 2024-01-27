@@ -26,18 +26,18 @@ void FileSystem::debug(Disk* disk) {
     disk->read(startBlockSuper, (char*)&super);
 
     printf("SuperBlock:\n");
-    printf("    %u blocks\n", super.Blocks);
-    printf("    %u inode blocks\n", super.InodeBlocks);
-    printf("    %u inodes\n", super.Inodes);
+    printf("    %u blocks\n", super.nBlocks);
+    printf("    %u inode blocks\n", super.nInodeBlocks);
+    printf("    %u inodes\n", super.nInodes);
 
-    if (super.MagicNumber != FS_MAGIC_NUMBER)
+    if (super.nMagic != FS_MAGIC_NUMBER)
         return;
 
     int ii = 0;
 
     // Read Inode blocks
     Block block;
-    for (uint32_t i = startBlockInode; i <= super.InodeBlocks; i++) {
+    for (uint32_t i = startBlockInode; i <= super.nInodeBlocks; i++) {
         disk->read(i, block.Data);
         for (uint32_t j = 0; j < FS_INODES_PER_BLOCK; j++) {
             if (block.Inodes[j].bonds > 0) {
@@ -78,11 +78,11 @@ bool FileSystem::format(Disk* disk) {
     memset(&block, 0, sizeof(Block));
 
     // Define totalizadores dos grupos de blocos (inode, data, directory)
-    block.Super.MagicNumber = FS_MAGIC_NUMBER;
-    block.Super.Blocks = disk->size();
-    block.Super.InodeBlocks = (uint32_t)std::ceil((block.Super.Blocks * 1.00) / 10);
-    block.Super.Inodes = block.Super.InodeBlocks * (FS_INODES_PER_BLOCK);
-    block.Super.MapBlocks = (uint32_t)std::ceil((int(block.Super.Blocks) * 1.00) / 100);
+    block.Super.nMagic = FS_MAGIC_NUMBER;
+    block.Super.nBlocks = disk->size();
+    block.Super.nInodeBlocks = (uint32_t)std::ceil((block.Super.nBlocks * 1.00) / 10);
+    block.Super.nInodes = block.Super.nInodeBlocks * (FS_INODES_PER_BLOCK);
+    block.Super.MapBlocks = (uint32_t)std::ceil((int(block.Super.nBlocks) * 1.00) / 100);
 
     // Define parametros de segurança
     block.Super.Protected = 0;                // Zera campos segurança
@@ -90,8 +90,8 @@ bool FileSystem::format(Disk* disk) {
     disk->write(startBlockSuper, block.Data);
 
     // Define inicio de blocos de dados e diretorio
-    startBlockData = startBlockInode + block.Super.InodeBlocks;
-    startBlockMapFree = block.Super.Blocks - block.Super.MapBlocks;
+    startBlockData = startBlockInode + block.Super.nInodeBlocks;
+    startBlockMapFree = block.Super.nBlocks - block.Super.MapBlocks;
 
     // Zera Blocos de Inode
     for (uint32_t i = startBlockInode; i < startBlockData; i++) {
@@ -118,7 +118,7 @@ bool FileSystem::format(Disk* disk) {
     }
 
     // Zera Bloco Mapa Free
-    for (uint32_t i = startBlockMapFree; i < block.Super.Blocks; i++) {
+    for (uint32_t i = startBlockMapFree; i < block.Super.nBlocks; i++) {
         Block FreeBlock;
         memset(FreeBlock.Data, 0, DISK_BLOCK_SIZE);
         disk->write(i, FreeBlock.Data);
@@ -156,21 +156,21 @@ bool FileSystem::mount(Disk* disk) {
     Block block;
     disk->read(startBlockSuper, block.Data);
 
-    if (block.Super.MagicNumber != FS_MAGIC_NUMBER)
+    if (block.Super.nMagic != FS_MAGIC_NUMBER)
         return false;
 
-    if (block.Super.InodeBlocks != std::ceil((block.Super.Blocks * 1.00) / 10))
+    if (block.Super.nInodeBlocks != std::ceil((block.Super.nBlocks * 1.00) / 10))
         return false;
 
-    if (block.Super.Inodes != (block.Super.InodeBlocks * FS_INODES_PER_BLOCK))
+    if (block.Super.nInodes != (block.Super.nInodeBlocks * FS_INODES_PER_BLOCK))
         return false;
 
-    if (block.Super.MapBlocks != (uint32_t)std::ceil((int(block.Super.Blocks) * 1.00) / 100))
+    if (block.Super.MapBlocks != (uint32_t)std::ceil((int(block.Super.nBlocks) * 1.00) / 100))
         return false;
 
     // define inicio de cada grupo de blocos
-    startBlockData = startBlockInode + block.Super.InodeBlocks;
-    startBlockMapFree = block.Super.Blocks - block.Super.MapBlocks;
+    startBlockData = startBlockInode + block.Super.nInodeBlocks;
+    startBlockMapFree = block.Super.nBlocks - block.Super.MapBlocks;
 
     // se fs estiver protegido
     if (block.Super.Protected) {
@@ -194,8 +194,8 @@ bool FileSystem::mount(Disk* disk) {
     MetaData = block.Super;
 
     // Allocate free block bitmap
-    this->free_blocks.resize(MetaData.Blocks, false);
-    this->inode_counter.resize(MetaData.InodeBlocks, 0);
+    this->free_blocks.resize(MetaData.nBlocks, false);
+    this->inode_counter.resize(MetaData.nInodeBlocks, 0);
 
     // Marca blocos de boot, super e inode como ocupados
     for (uint32_t i = startBlockBoot; i < startBlockInode; i++)
@@ -218,7 +218,7 @@ bool FileSystem::mount(Disk* disk) {
 
                 for (uint32_t k = 0; k < FS_POINTERS_PER_INODE; k++) {
                     if (block.Inodes[j].Direct[k]) {
-                        if (block.Inodes[j].Direct[k] < MetaData.Blocks)
+                        if (block.Inodes[j].Direct[k] < MetaData.nBlocks)
                             free_blocks[block.Inodes[j].Direct[k]] = true;
                         else
                             return false;
@@ -226,12 +226,12 @@ bool FileSystem::mount(Disk* disk) {
                 }
 
                 if (block.Inodes[j].Indirect) {
-                    if (block.Inodes[j].Indirect < MetaData.Blocks) {
+                    if (block.Inodes[j].Indirect < MetaData.nBlocks) {
                         free_blocks[block.Inodes[j].Indirect] = true;
                         Block indirect;
                         disk->read(block.Inodes[j].Indirect, indirect.Data);
                         for (uint32_t k = 0; k < FS_POINTERS_PER_BLOCK; k++) {
-                            if (indirect.Pointers[k] < MetaData.Blocks) {
+                            if (indirect.Pointers[k] < MetaData.nBlocks) {
                                 if (indirect.Pointers[k] != 0)
                                     free_blocks[indirect.Pointers[k]] = true;
                             } else
@@ -298,7 +298,7 @@ ssize_t FileSystem::create() {
 bool FileSystem::load_inode(size_t inumber, Inode* node) {
 
     // valida range
-    if (!mounted || (inumber > MetaData.Inodes) || (inumber < 0))
+    if (!mounted || (inumber > MetaData.nInodes) || (inumber < 0))
         return false;
 
     // encontra o indice do iNode no vetor de inodes

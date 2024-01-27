@@ -12,10 +12,10 @@
 #define FS_DIR_PER_BLOCK (DISK_BLOCK_SIZE / 32) // 256; // 16 (**original 8 nao sei o motivo!!)
 
 struct SuperBlock {         // Superblock structure
-    uint32_t MagicNumber;   // File system magic number
-    uint32_t Blocks;        // Number of blocks in file system
-    uint32_t InodeBlocks;   // Number of blocks reserved for inodes
-    uint32_t Inodes;        // Number of inodes in file system
+    uint32_t nMagic;        // File system magic number
+    uint32_t nBlocks;       // Number of blocks in file system
+    uint32_t nInodeBlocks;  // Number of blocks reserved for inodes
+    uint32_t nInodes;       // Number of inodes in file system
     uint32_t MapBlocks;     // number of blocks to dir
     uint32_t Protected;     // ??
     char PasswordHash[257]; // root pass
