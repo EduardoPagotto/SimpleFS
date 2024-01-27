@@ -55,7 +55,7 @@ int main(int argc, char* argv[]) {
         fprintf(stderr, "sfs> ");
         fflush(stderr);
 
-        if (fgets(line, BUFSIZ, stdin) == NULL) {
+        if (fgets(line, BUFSIZ, stdin) == nullptr) {
             break;
         }
 

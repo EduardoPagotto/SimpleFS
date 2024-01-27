@@ -1,27 +1,25 @@
-// disk.cpp: disk emulator
-
 #include "sfs/disk.hpp"
-
-#include <stdexcept>
-
-#include <errno.h>
-#include <fcntl.h>
+#include <filesystem>
+#include <format>
+#include <iostream>
 #include <string.h>
-#include <unistd.h>
 
 void Disk::open(const char* path, size_t nblocks) {
-    FileDescriptor = ::open(path, O_RDWR | O_CREAT, 0600);
-    if (FileDescriptor < 0) {
-        char what[BUFSIZ];
-        snprintf(what, BUFSIZ, "Unable to open %s: %s", path, strerror(errno));
-        throw std::runtime_error(what);
+
+    if (std::filesystem::exists(path)) {
+        file.open(path, std::ios::binary | std::ios::in | std::ios::out);
+    } else {
+        file.open(path, std::ios::binary | std::ios::in | std::ios::out | std::ios::trunc);
     }
 
-    if (ftruncate(FileDescriptor, nblocks * BLOCK_SIZE) < 0) {
-        char what[BUFSIZ];
-        snprintf(what, BUFSIZ, "Unable to open %s: %s", path, strerror(errno));
-        throw std::runtime_error(what);
-    }
+    if (!file.is_open())
+        throw std::runtime_error(strerror(errno));
+
+    // get length of file:
+    file.seekg(0, file.end);
+    int length = file.tellg();
+
+    std::cout << std::format("disk size: {}", length) << std::endl;
 
     Blocks = nblocks;
     Reads = 0;
@@ -29,47 +27,35 @@ void Disk::open(const char* path, size_t nblocks) {
 }
 
 Disk::~Disk() {
-    if (FileDescriptor > 0) {
-        printf("%lu disk block reads\n", Reads);
-        printf("%lu disk block writes\n", Writes);
-        close(FileDescriptor);
-        FileDescriptor = 0;
+    if (file.is_open()) {
+        std::cout << std::format("{0} disk block reads", Reads) << std::endl;
+        std::cout << std::format("{0} disk block writes", Writes) << std::endl;
+        file.close();
     }
 }
 
 void Disk::sanity_check(int blocknum, char* data) {
-    char what[BUFSIZ];
 
-    if (blocknum < 0) {
-        snprintf(what, BUFSIZ, "blocknum (%d) is negative!", blocknum);
-        throw std::invalid_argument(what);
-    }
+    if (blocknum < 0)
+        throw std::invalid_argument(std::format("blocknum (%d) is negative!", blocknum));
 
-    if (blocknum >= (int)Blocks) {
-        snprintf(what, BUFSIZ, "blocknum (%d) is too big!", blocknum);
-        throw std::invalid_argument(what);
-    }
+    if (blocknum >= (int)Blocks)
+        throw std::invalid_argument(std::format("blocknum (%d) is too big!", blocknum));
 
-    if (data == NULL) {
-        snprintf(what, BUFSIZ, "null data pointer!");
-        throw std::invalid_argument(what);
-    }
+    if (data == nullptr)
+        throw std::invalid_argument("nullptr data pointer!");
 }
 
 void Disk::read(int blocknum, char* data) {
     sanity_check(blocknum, data);
 
-    if (lseek(FileDescriptor, blocknum * BLOCK_SIZE, SEEK_SET) < 0) {
-        char what[BUFSIZ];
-        snprintf(what, BUFSIZ, "Unable to lseek %d: %s", blocknum, strerror(errno));
-        throw std::runtime_error(what);
-    }
+    const size_t pos = blocknum * BLOCK_SIZE;
 
-    if (::read(FileDescriptor, data, BLOCK_SIZE) != BLOCK_SIZE) {
-        char what[BUFSIZ];
-        snprintf(what, BUFSIZ, "Unable to read %d: %s", blocknum, strerror(errno));
-        throw std::runtime_error(what);
-    }
+    if (!file.seekg(pos))
+        throw std::runtime_error(std::format("Unable to lseek %d: %s", blocknum, strerror(errno)));
+
+    if (!file.read(data, BLOCK_SIZE))
+        throw std::runtime_error(std::format("Unable to read % d : % s ", blocknum, strerror(errno)));
 
     Reads++;
 }
@@ -77,17 +63,12 @@ void Disk::read(int blocknum, char* data) {
 void Disk::write(int blocknum, char* data) {
     sanity_check(blocknum, data);
 
-    if (lseek(FileDescriptor, blocknum * BLOCK_SIZE, SEEK_SET) < 0) {
-        char what[BUFSIZ];
-        snprintf(what, BUFSIZ, "Unable to lseek %d: %s", blocknum, strerror(errno));
-        throw std::runtime_error(what);
-    }
+    const size_t pos = blocknum * BLOCK_SIZE;
+    if (!file.seekp(pos))
+        throw std::runtime_error(std::format("Unable to lseek %d: %s", blocknum, strerror(errno)));
 
-    if (::write(FileDescriptor, data, BLOCK_SIZE) != BLOCK_SIZE) {
-        char what[BUFSIZ];
-        snprintf(what, BUFSIZ, "Unable to write %d: %s", blocknum, strerror(errno));
-        throw std::runtime_error(what);
-    }
+    if (!file.write(data, BLOCK_SIZE))
+        throw std::runtime_error(std::format("Unable to write %d: %s", blocknum, strerror(errno)));
 
     Writes++;
 }

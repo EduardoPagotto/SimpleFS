@@ -176,7 +176,7 @@ bool FileSystem::mount(Disk* disk) {
     if (block.Super.Protected) {
         char pass[BUFSIZ], line[BUFSIZ]; // FIXME : merda!!!!
         printf("Enter password: ");
-        if (fgets(line, BUFSIZ, stdin) == NULL) {
+        if (fgets(line, BUFSIZ, stdin) == nullptr) {
             return false;
         }
         sscanf(line, "%s", pass);
