@@ -9,12 +9,12 @@
 class FileSystem {
   public:
     const static uint32_t MAGIC_NUMBER = 0xf0f03410;
-    const static uint32_t INODES_PER_BLOCK = Disk::BLOCK_SIZE / 32; // 128 to 4k block
+    const static uint32_t INODES_PER_BLOCK = DISK_BLOCK_SIZE / 32; // 128 to 4k block
     const static uint32_t POINTERS_PER_INODE = 5;
-    const static uint32_t POINTERS_PER_BLOCK = Disk::BLOCK_SIZE / 4; // 1024; to 4k block
+    const static uint32_t POINTERS_PER_BLOCK = DISK_BLOCK_SIZE / 4; // 1024; to 4k block
     // extra to dir
-    const static uint32_t NAMESIZE = 28;                         // 16;
-    const static uint32_t DIR_PER_BLOCK = Disk::BLOCK_SIZE / 32; // 256; // 16 (**original 8 nao sei o motivo!!)
+    const static uint32_t NAMESIZE = 28;                        // 16;
+    const static uint32_t DIR_PER_BLOCK = DISK_BLOCK_SIZE / 32; // 256; // 16 (**original 8 nao sei o motivo!!)
 
     FileSystem();
     virtual ~FileSystem();
@@ -48,7 +48,7 @@ class FileSystem {
         SuperBlock Super;                      // Superblock
         Inode Inodes[INODES_PER_BLOCK];        // Inode block
         uint32_t Pointers[POINTERS_PER_BLOCK]; // Pointer block
-        char Data[Disk::BLOCK_SIZE];           // Data block
+        char Data[DISK_BLOCK_SIZE];            // Data block
         struct DirEntry Directories[FileSystem::DIR_PER_BLOCK];
     }; // Size 4096
 

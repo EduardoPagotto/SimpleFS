@@ -1,15 +1,15 @@
 #pragma once
-// #include <cstdio>
-// #include <stdlib.h>
 #include <fstream>
+
+#define DISK_BLOCK_SIZE 512 // 1024 // 4096
 
 class Disk {
   private:
-    std::fstream file; // File descriptor of disk image
-    size_t Blocks = 0; // Number of blocks in disk image
-    size_t Reads = 0;  // Number of reads performed
-    size_t Writes = 0; // Number of writes performed
-    size_t Mounts = 0; // Number of mounts
+    std::fstream m_file;  // File descriptor of disk image
+    size_t m_nBlock = 0;  // Number of blocks in disk image
+    size_t m_nReads = 0;  // Number of reads performed
+    size_t m_nWrites = 0; // Number of writes performed
+    size_t m_nMounts = 0; // Number of mounts
 
     /**
      * @brief Check parameters
@@ -21,12 +21,6 @@ class Disk {
     void sanity_check(int blocknum, char* data);
 
   public:
-    /**
-     * @brief Number of bytes per block
-     *
-     */
-    const static size_t BLOCK_SIZE = 512; // 1024; // 4096;
-
     Disk() = default;
     ~Disk();
 
@@ -44,7 +38,7 @@ class Disk {
      *
      * @return size_t
      */
-    size_t size() const { return Blocks; }
+    size_t size() const { return m_nBlock; }
 
     /**
      * @brief Whether or not disk is mounted
@@ -52,21 +46,21 @@ class Disk {
      * @return true Monted
      * @return false not monted
      */
-    bool mounted() const { return Mounts > 0; }
+    bool mounted() const { return m_nMounts > 0; }
 
     /**
      * @brief Increment mounts
      *
      */
-    void mount() { Mounts++; }
+    void mount() { m_nMounts++; }
 
     /**
      * @brief Decrement mounts
      *
      */
     void unmount() {
-        if (Mounts > 0)
-            Mounts--;
+        if (m_nMounts > 0)
+            m_nMounts--;
     }
 
     /**

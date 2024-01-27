@@ -113,14 +113,14 @@ bool FileSystem::format(Disk* disk) {
     // Zera Bloco de Dados depois dos blocos de inode
     for (uint32_t i = startBlockData; i < startBlockMapFree; i++) {
         Block DataBlock;
-        memset(DataBlock.Data, 0, Disk::BLOCK_SIZE);
+        memset(DataBlock.Data, 0, DISK_BLOCK_SIZE);
         disk->write(i, DataBlock.Data);
     }
 
     // Zera Bloco Mapa Free
     for (uint32_t i = startBlockMapFree; i < block.Super.Blocks; i++) {
         Block FreeBlock;
-        memset(FreeBlock.Data, 0, Disk::BLOCK_SIZE);
+        memset(FreeBlock.Data, 0, DISK_BLOCK_SIZE);
         disk->write(i, FreeBlock.Data);
     }
 
@@ -396,8 +396,8 @@ ssize_t FileSystem::stat(size_t inumber) {
 void FileSystem::read_helper(uint32_t blocknum, int offset, size_t* length, char** data, char** ptr) {
     fs_disk->read(blocknum, *ptr);
     *data += offset;
-    *ptr += Disk::BLOCK_SIZE;
-    *length -= (Disk::BLOCK_SIZE - offset);
+    *ptr += DISK_BLOCK_SIZE;
+    *length -= (DISK_BLOCK_SIZE - offset);
 
     return;
 }
@@ -419,9 +419,9 @@ ssize_t FileSystem::read(size_t inumber, char* data, size_t length, size_t offse
     int to_read = length;
 
     if (load_inode(inumber, &node)) {
-        if (offset < POINTERS_PER_INODE * Disk::BLOCK_SIZE) {
-            uint32_t direct_node = offset / Disk::BLOCK_SIZE;
-            offset %= Disk::BLOCK_SIZE;
+        if (offset < POINTERS_PER_INODE * DISK_BLOCK_SIZE) {
+            uint32_t direct_node = offset / DISK_BLOCK_SIZE;
+            offset %= DISK_BLOCK_SIZE;
 
             if (node.Direct[direct_node]) {
                 read_helper(node.Direct[direct_node++], offset, &length, &data, &ptr);
@@ -457,9 +457,9 @@ ssize_t FileSystem::read(size_t inumber, char* data, size_t length, size_t offse
             }
         } else {
             if (node.Indirect) {
-                offset -= (POINTERS_PER_INODE * Disk::BLOCK_SIZE);
-                uint32_t indirect_node = offset / Disk::BLOCK_SIZE;
-                offset %= Disk::BLOCK_SIZE;
+                offset -= (POINTERS_PER_INODE * DISK_BLOCK_SIZE);
+                uint32_t indirect_node = offset / DISK_BLOCK_SIZE;
+                offset %= DISK_BLOCK_SIZE;
 
                 Block indirect;
                 fs_disk->read(node.Indirect, indirect.Data);
@@ -543,9 +543,9 @@ void FileSystem::read_buffer(int offset, int* read, int length, char* data, uint
     if (!mounted)
         return;
 
-    char* ptr = (char*)calloc(Disk::BLOCK_SIZE, sizeof(char));
+    char* ptr = (char*)calloc(DISK_BLOCK_SIZE, sizeof(char));
 
-    for (int i = offset; i < (int)Disk::BLOCK_SIZE && *read < length; i++) {
+    for (int i = offset; i < (int)DISK_BLOCK_SIZE && *read < length; i++) {
         ptr[i] = data[*read];
         *read = *read + 1;
     }
@@ -568,7 +568,7 @@ ssize_t FileSystem::write(size_t inumber, char* data, size_t length, size_t offs
     int orig_offset = offset;
 
     // verifica se arquivo é maior do que a capacidade total maxima de armazenamento
-    if (length + offset > (POINTERS_PER_BLOCK + POINTERS_PER_INODE) * Disk::BLOCK_SIZE) {
+    if (length + offset > (POINTERS_PER_BLOCK + POINTERS_PER_INODE) * DISK_BLOCK_SIZE) {
         return -1;
     }
 
@@ -587,10 +587,10 @@ ssize_t FileSystem::write(size_t inumber, char* data, size_t length, size_t offs
         node.Size = std::max((size_t)node.Size, length + offset);
     }
 
-    if (offset < POINTERS_PER_INODE * Disk::BLOCK_SIZE) {
+    if (offset < POINTERS_PER_INODE * DISK_BLOCK_SIZE) {
         // arquivo cabe em 1 a 5 blocos (sem indireção)
-        int direct_node = offset / Disk::BLOCK_SIZE;
-        offset %= Disk::BLOCK_SIZE;
+        int direct_node = offset / DISK_BLOCK_SIZE;
+        offset %= DISK_BLOCK_SIZE;
 
         if (!check_allocation(&node, read, orig_offset, node.Direct[direct_node], false, indirect)) {
             // falhou em alocar todo o espaço grava apenas o que conseguiu
@@ -649,9 +649,9 @@ ssize_t FileSystem::write(size_t inumber, char* data, size_t length, size_t offs
             return write_ret(inumber, &node, read);
         }
     } else {
-        offset -= (Disk::BLOCK_SIZE * POINTERS_PER_INODE);
-        int indirect_node = offset / Disk::BLOCK_SIZE;
-        offset %= Disk::BLOCK_SIZE;
+        offset -= (DISK_BLOCK_SIZE * POINTERS_PER_INODE);
+        int indirect_node = offset / DISK_BLOCK_SIZE;
+        offset %= DISK_BLOCK_SIZE;
 
         // Se Node indirect ja esta instanciado ler bloco de dados do mesmo
         if (node.Indirect)
