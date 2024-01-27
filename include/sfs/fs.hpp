@@ -1,56 +1,52 @@
-#ifndef __FS_HPP
-#define __FS_HPP
-
+#pragma once
 #include "sfs/disk.hpp"
-
 #include <stdint.h>
 #include <vector>
 
+#define FS_MAGIC_NUMBER 0xf0f03410
+#define FS_INODES_PER_BLOCK (DISK_BLOCK_SIZE / 32) // 128 to 4k block
+#define FS_POINTERS_PER_INODE 5
+#define FS_POINTERS_PER_BLOCK (DISK_BLOCK_SIZE / 4) // 1024; to 4k block
+// extra to dir
+#define FS_NAMESIZE 28                          // 16;
+#define FS_DIR_PER_BLOCK (DISK_BLOCK_SIZE / 32) // 256; // 16 (**original 8 nao sei o motivo!!)
+
+struct SuperBlock {         // Superblock structure
+    uint32_t MagicNumber;   // File system magic number
+    uint32_t Blocks;        // Number of blocks in file system
+    uint32_t InodeBlocks;   // Number of blocks reserved for inodes
+    uint32_t Inodes;        // Number of inodes in file system
+    uint32_t MapBlocks;     // number of blocks to dir
+    uint32_t Protected;     // ??
+    char PasswordHash[257]; // root pass
+};                          // Size 281 Bytes
+
+struct Inode {
+    uint16_t mode;                          // tttt000r - wxrwxrwx //  01FF
+    uint16_t bonds;                         // num of link
+    uint32_t Size;                          // Size of file
+    uint32_t Direct[FS_POINTERS_PER_INODE]; // Direct pointers
+    uint32_t Indirect;                      // Indirect pointer
+    // uint32_t Indirect2;
+}; // size 32 Bytes
+
+struct DirEntry {
+    uint32_t inum;
+    char Name[FS_NAMESIZE];
+}; // 32
+
+union Block {
+    SuperBlock Super;                         // Superblock
+    Inode Inodes[FS_INODES_PER_BLOCK];        // Inode block
+    uint32_t Pointers[FS_POINTERS_PER_BLOCK]; // Pointer block
+    char Data[DISK_BLOCK_SIZE];               // Data block
+    struct DirEntry Directories[FS_DIR_PER_BLOCK];
+}; // Size 4096
+
 class FileSystem {
   public:
-    const static uint32_t MAGIC_NUMBER = 0xf0f03410;
-    const static uint32_t INODES_PER_BLOCK = DISK_BLOCK_SIZE / 32; // 128 to 4k block
-    const static uint32_t POINTERS_PER_INODE = 5;
-    const static uint32_t POINTERS_PER_BLOCK = DISK_BLOCK_SIZE / 4; // 1024; to 4k block
-    // extra to dir
-    const static uint32_t NAMESIZE = 28;                        // 16;
-    const static uint32_t DIR_PER_BLOCK = DISK_BLOCK_SIZE / 32; // 256; // 16 (**original 8 nao sei o motivo!!)
-
     FileSystem();
     virtual ~FileSystem();
-
-  private:
-    struct SuperBlock {         // Superblock structure
-        uint32_t MagicNumber;   // File system magic number
-        uint32_t Blocks;        // Number of blocks in file system
-        uint32_t InodeBlocks;   // Number of blocks reserved for inodes
-        uint32_t Inodes;        // Number of inodes in file system
-        uint32_t MapBlocks;     // number of blocks to dir
-        uint32_t Protected;     // ??
-        char PasswordHash[257]; // root pass
-    };                          // Size 281 Bytes
-
-    struct Inode {
-        uint16_t mode;                       // tttt000r - wxrwxrwx //  01FF
-        uint16_t bonds;                      // num of link
-        uint32_t Size;                       // Size of file
-        uint32_t Direct[POINTERS_PER_INODE]; // Direct pointers
-        uint32_t Indirect;                   // Indirect pointer
-        // uint32_t Indirect2;
-    }; // size 32 Bytes
-
-    struct DirEntry {
-        uint32_t inum;
-        char Name[NAMESIZE];
-    }; // 32
-
-    union Block {
-        SuperBlock Super;                      // Superblock
-        Inode Inodes[INODES_PER_BLOCK];        // Inode block
-        uint32_t Pointers[POINTERS_PER_BLOCK]; // Pointer block
-        char Data[DISK_BLOCK_SIZE];            // Data block
-        struct DirEntry Directories[FileSystem::DIR_PER_BLOCK];
-    }; // Size 4096
 
   public:
     void debug(Disk* disk);
@@ -72,7 +68,7 @@ class FileSystem {
      * @return true entrada no diretorio escrita com sucesso
      * @return false falha na escrita de diretorio
      */
-    bool touch(char name[FileSystem::NAMESIZE]);
+    bool touch(char name[FS_NAMESIZE]);
 
   private:
     /**
@@ -147,5 +143,3 @@ class FileSystem {
     unsigned int startBlockData;
     unsigned int startBlockMapFree;
 };
-
-#endif

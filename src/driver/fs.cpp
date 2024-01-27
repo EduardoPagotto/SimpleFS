@@ -30,7 +30,7 @@ void FileSystem::debug(Disk* disk) {
     printf("    %u inode blocks\n", super.InodeBlocks);
     printf("    %u inodes\n", super.Inodes);
 
-    if (super.MagicNumber != MAGIC_NUMBER)
+    if (super.MagicNumber != FS_MAGIC_NUMBER)
         return;
 
     int ii = 0;
@@ -39,13 +39,13 @@ void FileSystem::debug(Disk* disk) {
     Block block;
     for (uint32_t i = startBlockInode; i <= super.InodeBlocks; i++) {
         disk->read(i, block.Data);
-        for (uint32_t j = 0; j < INODES_PER_BLOCK; j++) {
+        for (uint32_t j = 0; j < FS_INODES_PER_BLOCK; j++) {
             if (block.Inodes[j].bonds > 0) {
                 printf("Inode %u:\n", ii);
                 printf("    size: %u bytes\n", block.Inodes[j].Size);
                 printf("    direct blocks:");
 
-                for (uint32_t k = 0; k < POINTERS_PER_INODE; k++) {
+                for (uint32_t k = 0; k < FS_POINTERS_PER_INODE; k++) {
                     if (block.Inodes[j].Direct[k])
                         printf(" %u", block.Inodes[j].Direct[k]);
                 }
@@ -55,7 +55,7 @@ void FileSystem::debug(Disk* disk) {
                     printf("    indirect block: %u\n    indirect data blocks:", block.Inodes[j].Indirect);
                     Block IndirectBlock;
                     disk->read(block.Inodes[j].Indirect, IndirectBlock.Data);
-                    for (uint32_t k = 0; k < POINTERS_PER_BLOCK; k++) {
+                    for (uint32_t k = 0; k < FS_POINTERS_PER_BLOCK; k++) {
                         if (IndirectBlock.Pointers[k])
                             printf(" %u", IndirectBlock.Pointers[k]);
                     }
@@ -78,10 +78,10 @@ bool FileSystem::format(Disk* disk) {
     memset(&block, 0, sizeof(Block));
 
     // Define totalizadores dos grupos de blocos (inode, data, directory)
-    block.Super.MagicNumber = FileSystem::MAGIC_NUMBER;
+    block.Super.MagicNumber = FS_MAGIC_NUMBER;
     block.Super.Blocks = disk->size();
-    block.Super.InodeBlocks = (uint32_t)std::ceil((int(block.Super.Blocks) * 1.00) / 10);
-    block.Super.Inodes = block.Super.InodeBlocks * (FileSystem::INODES_PER_BLOCK);
+    block.Super.InodeBlocks = (uint32_t)std::ceil((block.Super.Blocks * 1.00) / 10);
+    block.Super.Inodes = block.Super.InodeBlocks * (FS_INODES_PER_BLOCK);
     block.Super.MapBlocks = (uint32_t)std::ceil((int(block.Super.Blocks) * 1.00) / 100);
 
     // Define parametros de segurança
@@ -96,12 +96,12 @@ bool FileSystem::format(Disk* disk) {
     // Zera Blocos de Inode
     for (uint32_t i = startBlockInode; i < startBlockData; i++) {
         Block inodeBlock;
-        for (uint32_t j = 0; j < FileSystem::INODES_PER_BLOCK; j++) {
+        for (uint32_t j = 0; j < FS_INODES_PER_BLOCK; j++) {
             inodeBlock.Inodes[j].bonds = 0;
             inodeBlock.Inodes[j].mode = 0; // 0x01ff; tttt 000r wxrw xrwx
             inodeBlock.Inodes[j].Size = 0;
 
-            for (uint32_t k = 0; k < FileSystem::POINTERS_PER_INODE; k++)
+            for (uint32_t k = 0; k < FS_POINTERS_PER_INODE; k++)
                 inodeBlock.Inodes[j].Direct[k] = 0;
 
             inodeBlock.Inodes[j].Indirect = 0;
@@ -156,13 +156,13 @@ bool FileSystem::mount(Disk* disk) {
     Block block;
     disk->read(startBlockSuper, block.Data);
 
-    if (block.Super.MagicNumber != MAGIC_NUMBER)
+    if (block.Super.MagicNumber != FS_MAGIC_NUMBER)
         return false;
 
     if (block.Super.InodeBlocks != std::ceil((block.Super.Blocks * 1.00) / 10))
         return false;
 
-    if (block.Super.Inodes != (block.Super.InodeBlocks * INODES_PER_BLOCK))
+    if (block.Super.Inodes != (block.Super.InodeBlocks * FS_INODES_PER_BLOCK))
         return false;
 
     if (block.Super.MapBlocks != (uint32_t)std::ceil((int(block.Super.Blocks) * 1.00) / 100))
@@ -210,13 +210,13 @@ bool FileSystem::mount(Disk* disk) {
         // Le bloco inteiro de Inode
         disk->read(i, block.Data);
 
-        for (uint32_t j = 0; j < INODES_PER_BLOCK; j++) {
+        for (uint32_t j = 0; j < FS_INODES_PER_BLOCK; j++) {
             if (block.Inodes[j].bonds > 0) {
                 this->inode_counter[indiceBlocoInode]++;
 
                 free_blocks[i] = true;
 
-                for (uint32_t k = 0; k < POINTERS_PER_INODE; k++) {
+                for (uint32_t k = 0; k < FS_POINTERS_PER_INODE; k++) {
                     if (block.Inodes[j].Direct[k]) {
                         if (block.Inodes[j].Direct[k] < MetaData.Blocks)
                             free_blocks[block.Inodes[j].Direct[k]] = true;
@@ -230,7 +230,7 @@ bool FileSystem::mount(Disk* disk) {
                         free_blocks[block.Inodes[j].Indirect] = true;
                         Block indirect;
                         disk->read(block.Inodes[j].Indirect, indirect.Data);
-                        for (uint32_t k = 0; k < POINTERS_PER_BLOCK; k++) {
+                        for (uint32_t k = 0; k < FS_POINTERS_PER_BLOCK; k++) {
                             if (indirect.Pointers[k] < MetaData.Blocks) {
                                 if (indirect.Pointers[k] != 0)
                                     free_blocks[indirect.Pointers[k]] = true;
@@ -268,12 +268,12 @@ ssize_t FileSystem::create() {
 
         uint32_t indexBlockInode = i - startBlockInode;
 
-        if (inode_counter[indexBlockInode] == INODES_PER_BLOCK)
+        if (inode_counter[indexBlockInode] == FS_INODES_PER_BLOCK)
             continue;
         else
             this->fs_disk->read(i, block.Data);
 
-        for (uint32_t indexINode = 0; indexINode < INODES_PER_BLOCK; indexINode++) {
+        for (uint32_t indexINode = 0; indexINode < FS_INODES_PER_BLOCK; indexINode++) {
             if (block.Inodes[indexINode].bonds == 0) {
                 block.Inodes[indexINode].bonds++;
                 block.Inodes[indexINode].mode = 0b0001000110110110;
@@ -287,7 +287,7 @@ ssize_t FileSystem::create() {
 
                 this->fs_disk->write(i, block.Data);
 
-                return (((indexBlockInode)*INODES_PER_BLOCK) + indexINode);
+                return (((indexBlockInode)*FS_INODES_PER_BLOCK) + indexINode);
             }
         }
     }
@@ -302,7 +302,7 @@ bool FileSystem::load_inode(size_t inumber, Inode* node) {
         return false;
 
     // encontra o indice do iNode no vetor de inodes
-    uint32_t indiceInodeLocal = inumber / INODES_PER_BLOCK;
+    uint32_t indiceInodeLocal = inumber / FS_INODES_PER_BLOCK;
 
     // Valida se bloco de iNode nao esta vazio no indice de Inodes
     if (this->inode_counter[indiceInodeLocal]) {
@@ -313,7 +313,7 @@ bool FileSystem::load_inode(size_t inumber, Inode* node) {
         uint32_t iBlock = indiceInodeLocal + startBlockInode;
 
         // Encontra o indice de Inode dentro do Bloco encontrado
-        int indexINode = inumber % INODES_PER_BLOCK;
+        int indexINode = inumber % FS_INODES_PER_BLOCK;
 
         // Le o bloco de iNode Inteiro
         fs_disk->read(iBlock, block.Data);
@@ -342,14 +342,14 @@ bool FileSystem::remove(size_t inumber) {
         node.bonds--;
         node.Size = 0;
 
-        uint32_t indiceInodeLocal = inumber / INODES_PER_BLOCK;
+        uint32_t indiceInodeLocal = inumber / FS_INODES_PER_BLOCK;
         uint32_t iBlock = indiceInodeLocal + startBlockInode;
 
         if (!(--inode_counter[indiceInodeLocal])) {
             this->free_blocks[iBlock] = false;
         }
 
-        for (uint32_t i = 0; i < POINTERS_PER_INODE; i++) {
+        for (uint32_t i = 0; i < FS_POINTERS_PER_INODE; i++) {
             this->free_blocks[node.Direct[i]] = false;
             node.Direct[i] = 0;
         }
@@ -360,7 +360,7 @@ bool FileSystem::remove(size_t inumber) {
             this->free_blocks[node.Indirect] = false;
             node.Indirect = 0;
 
-            for (uint32_t i = 0; i < POINTERS_PER_BLOCK; i++) {
+            for (uint32_t i = 0; i < FS_POINTERS_PER_BLOCK; i++) {
                 if (indirect.Pointers[i])
                     this->free_blocks[indirect.Pointers[i]] = false;
             }
@@ -368,7 +368,7 @@ bool FileSystem::remove(size_t inumber) {
 
         Block block;
         fs_disk->read(iBlock, block.Data);
-        block.Inodes[inumber % INODES_PER_BLOCK] = node;
+        block.Inodes[inumber % FS_INODES_PER_BLOCK] = node;
         fs_disk->write(iBlock, block.Data);
 
         return true;
@@ -419,24 +419,24 @@ ssize_t FileSystem::read(size_t inumber, char* data, size_t length, size_t offse
     int to_read = length;
 
     if (load_inode(inumber, &node)) {
-        if (offset < POINTERS_PER_INODE * DISK_BLOCK_SIZE) {
+        if (offset < FS_POINTERS_PER_INODE * DISK_BLOCK_SIZE) {
             uint32_t direct_node = offset / DISK_BLOCK_SIZE;
             offset %= DISK_BLOCK_SIZE;
 
             if (node.Direct[direct_node]) {
                 read_helper(node.Direct[direct_node++], offset, &length, &data, &ptr);
-                while (length > 0 && direct_node < POINTERS_PER_INODE && node.Direct[direct_node]) {
+                while (length > 0 && direct_node < FS_POINTERS_PER_INODE && node.Direct[direct_node]) {
                     read_helper(node.Direct[direct_node++], 0, &length, &data, &ptr);
                 }
 
                 if (length <= 0)
                     return to_read;
                 else {
-                    if (direct_node == POINTERS_PER_INODE && node.Indirect) {
+                    if (direct_node == FS_POINTERS_PER_INODE && node.Indirect) {
                         Block indirect;
                         fs_disk->read(node.Indirect, indirect.Data);
 
-                        for (uint32_t i = 0; i < POINTERS_PER_BLOCK; i++) {
+                        for (uint32_t i = 0; i < FS_POINTERS_PER_BLOCK; i++) {
                             if (indirect.Pointers[i] && length > 0) {
                                 read_helper(indirect.Pointers[i], 0, &length, &data, &ptr);
                             } else
@@ -457,7 +457,7 @@ ssize_t FileSystem::read(size_t inumber, char* data, size_t length, size_t offse
             }
         } else {
             if (node.Indirect) {
-                offset -= (POINTERS_PER_INODE * DISK_BLOCK_SIZE);
+                offset -= (FS_POINTERS_PER_INODE * DISK_BLOCK_SIZE);
                 uint32_t indirect_node = offset / DISK_BLOCK_SIZE;
                 offset %= DISK_BLOCK_SIZE;
 
@@ -468,7 +468,7 @@ ssize_t FileSystem::read(size_t inumber, char* data, size_t length, size_t offse
                     read_helper(indirect.Pointers[indirect_node++], offset, &length, &data, &ptr);
                 }
 
-                for (uint32_t i = indirect_node; i < POINTERS_PER_BLOCK; i++) {
+                for (uint32_t i = indirect_node; i < FS_POINTERS_PER_BLOCK; i++) {
                     if (indirect.Pointers[i] && length > 0) {
                         read_helper(indirect.Pointers[i], 0, &length, &data, &ptr);
                     } else
@@ -526,8 +526,8 @@ ssize_t FileSystem::write_ret(size_t inumber, Inode* node, int ret) {
         return -1;
 
     // encocntra bloco de posicao do inode correspondente
-    int i = (inumber / INODES_PER_BLOCK) + startBlockInode;
-    int j = inumber % INODES_PER_BLOCK;
+    int i = (inumber / FS_INODES_PER_BLOCK) + startBlockInode;
+    int j = inumber % FS_INODES_PER_BLOCK;
 
     // Le o bloco inteiro e grava os novos dados do inode em sua posicao
     Block block;
@@ -568,7 +568,7 @@ ssize_t FileSystem::write(size_t inumber, char* data, size_t length, size_t offs
     int orig_offset = offset;
 
     // verifica se arquivo é maior do que a capacidade total maxima de armazenamento
-    if (length + offset > (POINTERS_PER_BLOCK + POINTERS_PER_INODE) * DISK_BLOCK_SIZE) {
+    if (length + offset > (FS_POINTERS_PER_BLOCK + FS_POINTERS_PER_INODE) * DISK_BLOCK_SIZE) {
         return -1;
     }
 
@@ -576,18 +576,18 @@ ssize_t FileSystem::write(size_t inumber, char* data, size_t length, size_t offs
         // entradas consecutivas com offset != 0 inode sera atualizado
         node.bonds++;
         node.Size = length + offset;
-        for (uint32_t ii = 0; ii < POINTERS_PER_INODE; ii++) {
+        for (uint32_t ii = 0; ii < FS_POINTERS_PER_INODE; ii++) {
             node.Direct[ii] = 0;
         }
         node.Indirect = 0;
-        inode_counter[inumber / INODES_PER_BLOCK]++;
-        free_blocks[inumber / INODES_PER_BLOCK + 1] = true;
+        inode_counter[inumber / FS_INODES_PER_BLOCK]++;
+        free_blocks[inumber / FS_INODES_PER_BLOCK + 1] = true;
     } else {
         // primeira entrada com offset 0, inode sera preenchido pela primeira vez
         node.Size = std::max((size_t)node.Size, length + offset);
     }
 
-    if (offset < POINTERS_PER_INODE * DISK_BLOCK_SIZE) {
+    if (offset < FS_POINTERS_PER_INODE * DISK_BLOCK_SIZE) {
         // arquivo cabe em 1 a 5 blocos (sem indireção)
         int direct_node = offset / DISK_BLOCK_SIZE;
         offset %= DISK_BLOCK_SIZE;
@@ -605,7 +605,7 @@ ssize_t FileSystem::write(size_t inumber, char* data, size_t length, size_t offs
         else {
 
             // continua a escrever nos blocos diretos
-            for (int i = direct_node; i < (int)POINTERS_PER_INODE; i++) {
+            for (int i = direct_node; i < FS_POINTERS_PER_INODE; i++) {
                 if (!check_allocation(&node, read, orig_offset, node.Direct[direct_node], false, indirect)) {
                     return write_ret(inumber, &node, read);
                 }
@@ -628,12 +628,12 @@ ssize_t FileSystem::write(size_t inumber, char* data, size_t length, size_t offs
                 }
                 fs_disk->read(node.Indirect, indirect.Data);
 
-                for (int i = 0; i < (int)POINTERS_PER_BLOCK; i++) {
+                for (int i = 0; i < FS_POINTERS_PER_BLOCK; i++) {
                     indirect.Pointers[i] = 0;
                 }
             }
 
-            for (int j = 0; j < (int)POINTERS_PER_BLOCK; j++) {
+            for (int j = 0; j < FS_POINTERS_PER_BLOCK; j++) {
                 if (!check_allocation(&node, read, orig_offset, indirect.Pointers[j], true, indirect)) {
                     return write_ret(inumber, &node, read);
                 }
@@ -649,7 +649,7 @@ ssize_t FileSystem::write(size_t inumber, char* data, size_t length, size_t offs
             return write_ret(inumber, &node, read);
         }
     } else {
-        offset -= (DISK_BLOCK_SIZE * POINTERS_PER_INODE);
+        offset -= (DISK_BLOCK_SIZE * FS_POINTERS_PER_INODE);
         int indirect_node = offset / DISK_BLOCK_SIZE;
         offset %= DISK_BLOCK_SIZE;
 
@@ -666,7 +666,7 @@ ssize_t FileSystem::write(size_t inumber, char* data, size_t length, size_t offs
             fs_disk->read(node.Indirect, indirect.Data);
 
             // Limpa ponteiros dentro de indirect
-            for (int i = 0; i < (int)POINTERS_PER_BLOCK; i++) {
+            for (int i = 0; i < FS_POINTERS_PER_BLOCK; i++) {
                 indirect.Pointers[i] = 0;
             }
         }
@@ -684,7 +684,7 @@ ssize_t FileSystem::write(size_t inumber, char* data, size_t length, size_t offs
             fs_disk->write(node.Indirect, indirect.Data);
             return write_ret(inumber, &node, length);
         } else {
-            for (int j = indirect_node; j < (int)POINTERS_PER_BLOCK; j++) {
+            for (int j = indirect_node; j < FS_POINTERS_PER_BLOCK; j++) {
                 // Aloca novo bloco
                 if (!check_allocation(&node, read, orig_offset, indirect.Pointers[j], true, indirect)) {
                     return write_ret(inumber, &node, read);
@@ -713,7 +713,7 @@ ssize_t FileSystem::write(size_t inumber, char* data, size_t length, size_t offs
 bool FileSystem::add_dir_entry(const uint32_t& nodeId, char name[], Block* dirBlock) {
 
     uint32_t last = 0;
-    for (; last < FileSystem::DIR_PER_BLOCK; last++) {
+    for (; last < FS_DIR_PER_BLOCK; last++) {
         if ((last < 2) && (strlen(dirBlock->Directories[last].Name) == 0))
             break;
 
@@ -735,7 +735,7 @@ bool FileSystem::add_dir_entry(const uint32_t& nodeId, char name[], Block* dirBl
     return true;
 }
 
-bool FileSystem::touch(char name[FileSystem::NAMESIZE]) {
+bool FileSystem::touch(char name[FS_NAMESIZE]) {
     if (!mounted) {
         return false;
     }

@@ -286,7 +286,7 @@ bool copyin(FileSystem& fs, const char* path, size_t inumber) {
 
 void do_touch(FileSystem& fs, char* path) {
 
-    char name[FileSystem::NAMESIZE] = {0};
+    char name[FS_NAMESIZE] = {0};
 
     strcpy(name, path);
 
