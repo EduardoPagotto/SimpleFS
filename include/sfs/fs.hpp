@@ -36,12 +36,12 @@ struct DirEntry {
 }; // 32
 
 union Block {
-    SuperBlock Super;                         // Superblock
-    Inode Inodes[FS_INODES_PER_BLOCK];        // Inode block
-    uint32_t Pointers[FS_POINTERS_PER_BLOCK]; // Pointer block
-    char Data[DISK_BLOCK_SIZE];               // Data block
-    struct DirEntry Directories[FS_DIR_PER_BLOCK];
-}; // Size 4096
+    SuperBlock Super;                              // Superblock
+    Inode Inodes[FS_INODES_PER_BLOCK];             // Inode block [16]
+    uint32_t Pointers[FS_POINTERS_PER_BLOCK];      // Pointer block [128]
+    char Data[DISK_BLOCK_SIZE];                    // Data block [512]
+    struct DirEntry Directories[FS_DIR_PER_BLOCK]; // Drirectory [16]
+};                                                 // Size 512
 
 class FileSystem {
   public:
