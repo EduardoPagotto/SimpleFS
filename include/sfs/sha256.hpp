@@ -4,6 +4,8 @@
 #include <string>
 
 #define SHA224_256_BLOCK_SIZE (512 / 8)
+#define DIGEST_SIZE (256 / 8)
+
 #define SHA2_SHFR(x, n) (x >> n)
 #define SHA2_ROTR(x, n) ((x >> n) | (x << ((sizeof(x) << 3) - n)))
 #define SHA2_ROTL(x, n) ((x << n) | (x >> ((sizeof(x) << 3) - n)))
@@ -27,7 +29,7 @@
     }
 
 class SHA256 {
-  protected:
+  private:
     inline static uint32_t sha256_k[] = {
         0x428a2f98, 0x71374491, 0xb5c0fbcf, 0xe9b5dba5, 0x3956c25b, 0x59f111f1, 0x923f82a4, 0xab1c5ed5, 0xd807aa98, 0x12835b01, 0x243185be,
         0x550c7dc3, 0x72be5d74, 0x80deb1fe, 0x9bdc06a7, 0xc19bf174, 0xe49b69c1, 0xefbe4786, 0x0fc19dc6, 0x240ca1cc, 0x2de92c6f, 0x4a7484aa,
@@ -50,68 +52,70 @@ class SHA256 {
         m_tot_len = 0;
     }
 
-    void update(const uint8_t* message, uint32_t len) {
-        uint32_t block_nb;
-        uint32_t new_len, rem_len, tmp_len;
-        const unsigned char* shifted_message;
-        tmp_len = SHA224_256_BLOCK_SIZE - m_len;
-        rem_len = len < tmp_len ? len : tmp_len;
+    void update(const uint8_t* message, const uint32_t& len) {
+
+        const uint32_t tmp_len = SHA224_256_BLOCK_SIZE - m_len;
+        uint32_t rem_len = len < tmp_len ? len : tmp_len;
+
         memcpy(&m_block[m_len], message, rem_len);
+
         if (m_len + len < SHA224_256_BLOCK_SIZE) {
             m_len += len;
-            return;
+        } else {
+
+            const uint32_t new_len = len - rem_len;
+            const uint32_t block_nb = new_len / SHA224_256_BLOCK_SIZE;
+            const uint8_t* shifted_message = message + rem_len;
+
+            transform(m_block, 1);
+            transform(shifted_message, block_nb);
+
+            rem_len = new_len % SHA224_256_BLOCK_SIZE;
+
+            memcpy(m_block, &shifted_message[block_nb << 6], rem_len);
+
+            m_len = rem_len;
+            m_tot_len += (block_nb + 1) << 6;
         }
-        new_len = len - rem_len;
-        block_nb = new_len / SHA224_256_BLOCK_SIZE;
-        shifted_message = message + rem_len;
-        transform(m_block, 1);
-        transform(shifted_message, block_nb);
-        rem_len = new_len % SHA224_256_BLOCK_SIZE;
-        memcpy(m_block, &shifted_message[block_nb << 6], rem_len);
-        m_len = rem_len;
-        m_tot_len += (block_nb + 1) << 6;
     }
 
     void final(uint8_t* digest) {
-        uint32_t block_nb;
-        uint32_t pm_len;
-        uint32_t len_b;
-        int32_t i;
-        block_nb = (1 + ((SHA224_256_BLOCK_SIZE - 9) < (m_len % SHA224_256_BLOCK_SIZE)));
-        len_b = (m_tot_len + m_len) << 3;
-        pm_len = block_nb << 6;
+
+        const uint32_t block_nb = (1 + ((SHA224_256_BLOCK_SIZE - 9) < (m_len % SHA224_256_BLOCK_SIZE)));
+        const uint32_t len_b = (m_tot_len + m_len) << 3;
+        const uint32_t pm_len = block_nb << 6;
+
         memset(m_block + m_len, 0, pm_len - m_len);
         m_block[m_len] = 0x80;
+
         SHA2_UNPACK32(len_b, m_block + pm_len - 4);
+
         transform(m_block, block_nb);
-        for (i = 0; i < 8; i++) {
+        for (int32_t i = 0; i < 8; i++)
             SHA2_UNPACK32(m_h[i], &digest[i << 2]);
-        }
     }
 
-    static const uint32_t DIGEST_SIZE = (256 / 8);
-
   protected:
-    void transform(const uint8_t* message, uint32_t block_nb) {
+    void transform(const uint8_t* message, const uint32_t& block_nb) {
 
         uint32_t w[64];
         uint32_t wv[8];
-        uint32_t t1, t2;
-        const unsigned char* sub_block;
-        int32_t i;
-        int32_t j;
-        for (i = 0; i < (int32_t)block_nb; i++) {
+        const uint8_t* sub_block;
+
+        for (uint32_t i{0}; i < block_nb; i++) {
+
             sub_block = message + (i << 6);
-            for (j = 0; j < 16; j++) {
+
+            for (int32_t j = 0; j < 16; j++)
                 SHA2_PACK32(&sub_block[j << 2], &w[j]);
-            }
-            for (j = 16; j < 64; j++) {
+
+            for (int32_t j = 16; j < 64; j++)
                 w[j] = SHA256_F4(w[j - 2]) + w[j - 7] + SHA256_F3(w[j - 15]) + w[j - 16];
-            }
-            for (j = 0; j < 8; j++) {
+
+            for (int32_t j = 0; j < 8; j++)
                 wv[j] = m_h[j];
-            }
-            for (j = 0; j < 64; j++) {
+
+            for (uint32_t t1, t2, j{0}; j < 64; j++) {
                 t1 = wv[7] + SHA256_F2(wv[4]) + SHA2_CH(wv[4], wv[5], wv[6]) + sha256_k[j] + w[j];
                 t2 = SHA256_F1(wv[0]) + SHA2_MAJ(wv[0], wv[1], wv[2]);
                 wv[7] = wv[6];
@@ -123,9 +127,9 @@ class SHA256 {
                 wv[1] = wv[0];
                 wv[0] = t1 + t2;
             }
-            for (j = 0; j < 8; j++) {
+
+            for (int32_t j = 0; j < 8; j++)
                 m_h[j] += wv[j];
-            }
         }
     }
     uint32_t m_tot_len;
@@ -134,18 +138,19 @@ class SHA256 {
     uint32_t m_h[8];
 };
 
-std::string sha256(std::string input) {
-    unsigned char digest[SHA256::DIGEST_SIZE];
-    memset(digest, 0, SHA256::DIGEST_SIZE);
+const std::string sha256(const std::string& input) {
+    unsigned char digest[DIGEST_SIZE];
+    memset(digest, 0, DIGEST_SIZE);
 
     SHA256 ctx = SHA256();
     ctx.init();
-    ctx.update((unsigned char*)input.c_str(), input.length());
+    ctx.update((uint8_t*)input.c_str(), input.length());
     ctx.final(digest);
 
-    char buf[2 * SHA256::DIGEST_SIZE + 1];
-    buf[2 * SHA256::DIGEST_SIZE] = 0;
-    for (int32_t i = 0; i < SHA256::DIGEST_SIZE; i++)
+    char buf[2 * DIGEST_SIZE + 1];
+    buf[2 * DIGEST_SIZE] = 0;
+    for (int32_t i = 0; i < DIGEST_SIZE; i++)
         sprintf(buf + i * 2, "%02x", digest[i]);
+
     return std::string(buf);
 }
