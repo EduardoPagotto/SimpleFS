@@ -53,11 +53,11 @@ class Disk {
     }
 
     /**
-     * @brief Get size of disk (in terms of blocks)
+     * @brief Get size of disk (in blocks)
      *
      * @return uint32_t
      */
-    const uint32_t size() const { return m_nBlock; }
+    const uint32_t tot_blocks() const { return m_nBlock; }
 
     /**
      * @brief Whether or not disk is mounted

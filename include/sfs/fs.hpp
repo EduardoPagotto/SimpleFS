@@ -11,6 +11,10 @@
 #define FS_NAMESIZE 28                          // 16;
 #define FS_DIR_PER_BLOCK (DISK_BLOCK_SIZE / 32) // 256; // 16 (**original 8 nao sei o motivo!!)
 
+#define FS_START_BLOCK_BOOT 0 // TODO: quando usar incrementar todos abaixo
+#define FS_START_BLOCK_SUPER 0
+#define FS_START_BLOCK_INODE 1
+
 struct SuperBlock {        // Superblock structure
     uint32_t nMagic;       // File system magic number
     uint32_t nBlocks;      // Number of blocks in file system
@@ -36,12 +40,25 @@ struct DirEntry {
 }; // 32
 
 union Block {
-    SuperBlock Super;                              // Superblock
-    Inode Inodes[FS_INODES_PER_BLOCK];             // Inode block [16]
-    uint32_t Pointers[FS_POINTERS_PER_BLOCK];      // Pointer block [128]
-    char Data[DISK_BLOCK_SIZE];                    // Data block [512]
-    struct DirEntry Directories[FS_DIR_PER_BLOCK]; // Drirectory [16]
-};                                                 // Size 512
+    SuperBlock super;                         // Superblock
+    Inode inodes[FS_INODES_PER_BLOCK];        // Inode block [16]
+    uint32_t pointers[FS_POINTERS_PER_BLOCK]; // Pointer block [128]
+    char data[DISK_BLOCK_SIZE];               // Data block [512]
+    struct DirEntry dirs[FS_DIR_PER_BLOCK];   // Drirectory [16]
+};                                            // Size 512
+
+struct Fs {
+    Fs() = default;
+    bool mounted{false};
+    uint32_t curr_dir{0};
+    uint32_t startBlockData{0};
+    uint32_t startBlockMapFree{0};
+    std::vector<bool> free_blocks;
+    // Cada posicao do array correponde a um bloco de inode
+    std::vector<uint32_t> inode_counter; // quantidade de inodes usados em cada block
+    std::vector<uint32_t> dir_counter;
+    SuperBlock metaData;
+};
 
 class FileSystem {
   public:
@@ -49,10 +66,10 @@ class FileSystem {
     virtual ~FileSystem();
 
   public:
-    void debug(Disk* disk);
-    bool format(Disk* disk);
+    void debug(Disk& disk);
+    bool format(Disk& disk);
 
-    bool mount(Disk* disk);
+    bool mount(Disk& disk);
 
     ssize_t create();
     bool remove(size_t inumber);
@@ -125,10 +142,6 @@ class FileSystem {
 
     void read_helper(uint32_t blocknum, int offset, size_t* length, char** data, char** ptr);
 
-    //--- diretorios
-    bool add_dir_entry(const uint32_t& nodeId, char name[], Block* dirBlock);
-    // void write_dir_back(Directory dir);
-
     bool mounted;
     Disk* fs_disk;
     SuperBlock MetaData;
@@ -143,3 +156,7 @@ class FileSystem {
     unsigned int startBlockData;
     unsigned int startBlockMapFree;
 };
+
+//--- diretorios
+bool add_dir_entry(const uint32_t& nodeId, char name[], Block& dirBlock);
+// void write_dir_back(Directory dir);

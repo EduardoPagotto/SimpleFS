@@ -66,29 +66,37 @@ int main(int argc, char* argv[]) {
 
         if (streq(cmd, "debug")) {
             do_debug(disk, fs, args, arg1, arg2);
+
         } else if (streq(cmd, "format")) {
             do_format(disk, fs, args, arg1, arg2);
+
         } else if (streq(cmd, "mount")) {
             do_mount(disk, fs, args, arg1, arg2);
+
         } else if (streq(cmd, "cat")) {
             do_cat(disk, fs, args, arg1, arg2);
+
         } else if (streq(cmd, "copyout")) {
             do_copyout(disk, fs, args, arg1, arg2);
+
         } else if (streq(cmd, "create")) {
             do_create(disk, fs, args, arg1, arg2);
+
         } else if (streq(cmd, "remove")) {
             do_remove(disk, fs, args, arg1, arg2);
+
         } else if (streq(cmd, "stat")) {
             do_stat(disk, fs, args, arg1, arg2);
+
         } else if (streq(cmd, "copyin")) {
             do_copyin(disk, fs, args, arg1, arg2);
 
         } else if (streq(cmd, "touch")) {
-
             do_touch(fs, arg1);
 
         } else if (streq(cmd, "help")) {
             do_help(disk, fs, args, arg1, arg2);
+
         } else if (streq(cmd, "exit") || streq(cmd, "quit")) {
             break;
         } else {
@@ -108,7 +116,7 @@ void do_debug(Disk& disk, FileSystem& fs, int args, char* arg1, char* arg2) {
         return;
     }
 
-    fs.debug(&disk);
+    fs.debug(disk);
 }
 
 void do_format(Disk& disk, FileSystem& fs, int args, char* arg1, char* arg2) {
@@ -117,7 +125,7 @@ void do_format(Disk& disk, FileSystem& fs, int args, char* arg1, char* arg2) {
         return;
     }
 
-    if (fs.format(&disk)) {
+    if (fs.format(disk)) {
         printf("disk formatted.\n");
     } else {
         printf("format failed!\n");
@@ -130,7 +138,7 @@ void do_mount(Disk& disk, FileSystem& fs, int args, char* arg1, char* arg2) {
         return;
     }
 
-    if (fs.mount(&disk)) {
+    if (fs.mount(disk)) {
         printf("disk mounted.\n");
     } else {
         printf("mount failed!\n");
