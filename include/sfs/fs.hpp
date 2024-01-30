@@ -47,18 +47,18 @@ union Block {
     struct DirEntry dirs[FS_DIR_PER_BLOCK];   // Drirectory [16]
 };                                            // Size 512
 
-struct Fs {
-    Fs() = default;
-    bool mounted{false};
-    uint32_t curr_dir{0};
-    uint32_t startBlockData{0};
-    uint32_t startBlockMapFree{0};
-    std::vector<bool> free_blocks;
-    // Cada posicao do array correponde a um bloco de inode
-    std::vector<uint32_t> inode_counter; // quantidade de inodes usados em cada block
-    std::vector<uint32_t> dir_counter;
-    SuperBlock metaData;
-};
+// struct Fs {
+//     Fs() = default;
+//     bool mounted{false};
+//     uint32_t curr_dir{0};
+//     uint32_t startBlockData{0};
+//     uint32_t startBlockMapFree{0};
+//     std::vector<bool> free_blocks;
+//     // Cada posicao do array correponde a um bloco de inode
+//     std::vector<uint32_t> inode_counter; // quantidade de inodes usados em cada block
+//     std::vector<uint32_t> dir_counter;
+//     SuperBlock metaData;
+// };
 
 class FileSystem {
   public:

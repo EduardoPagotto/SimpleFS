@@ -8,10 +8,6 @@
 
 #define streq(a, b) (strcmp((a), (b)) == 0) // TODO: solucao idiota
 
-#define startBlockBoot 0 // TODO: quando usar incrementar todos abaixo
-#define startBlockSuper 0
-#define startBlockInode 1
-
 FileSystem::FileSystem() : mounted(false), fs_disk(nullptr) {
     startBlockData = -1;
     startBlockMapFree = -1;
@@ -23,7 +19,7 @@ void FileSystem::debug(Disk& disk) {
     SuperBlock super;
 
     // Read Superblock
-    disk.read(startBlockSuper, (char*)&super);
+    disk.read(FS_START_BLOCK_SUPER, (char*)&super);
 
     printf("SuperBlock:\n");
     printf("    %u blocks\n", super.nBlocks);
@@ -37,7 +33,7 @@ void FileSystem::debug(Disk& disk) {
 
     // Read Inode blocks
     Block block;
-    for (uint32_t i = startBlockInode; i <= super.nInodeBlocks; i++) {
+    for (uint32_t i = FS_START_BLOCK_INODE; i <= super.nInodeBlocks; i++) {
         disk.read(i, block.data);
         for (uint32_t j = 0; j < FS_INODES_PER_BLOCK; j++) {
             if (block.inodes[j].bonds > 0) {
@@ -73,28 +69,36 @@ bool FileSystem::format(Disk& disk) {
     if (disk.mounted())
         return false;
 
-    // Cria SuperBlock
+    // Create SuperBlock
     Block block;
     memset(&block, 0, sizeof(Block));
-
     // Define totalizadores dos grupos de blocos (inode, data, directory)
-    block.super.nMagic = FS_MAGIC_NUMBER;
-    block.super.nBlocks = disk.tot_blocks();
-    block.super.nInodeBlocks = (uint32_t)std::ceil((block.super.nBlocks * 1.00) / 10);
-    block.super.nInodes = block.super.nInodeBlocks * (FS_INODES_PER_BLOCK);
-    block.super.nMapBlocks = (uint32_t)std::ceil((int(block.super.nBlocks) * 1.00) / 100);
+    block.super.nMagic = FS_MAGIC_NUMBER;                                              // Magic number
+    block.super.nBlocks = disk.tot_blocks();                                           // Total Blocks
+    block.super.nInodeBlocks = (uint32_t)std::ceil((block.super.nBlocks * 1.00) / 10); // Total inode Block
+    block.super.nInodes = block.super.nInodeBlocks * (FS_INODES_PER_BLOCK);            // Total inode
+    block.super.nMapBlocks = (uint32_t)std::ceil((block.super.nBlocks * 1.00) / 100);  // Start map
+    block.super.Protected = 0;                                                         // Define parametros de segurança
+    memset(block.super.szPassHash, 0, 257);                                            // Zera hash root
 
-    // Define parametros de segurança
-    block.super.Protected = 0;              // Zera campos segurança
-    memset(block.super.szPassHash, 0, 257); // Zera hash root
-    disk.write(startBlockSuper, block.data);
+    // write SuperBlock
+    disk.write(FS_START_BLOCK_SUPER, block.data);
 
     // Define inicio de blocos de dados e diretorio
-    startBlockData = startBlockInode + block.super.nInodeBlocks;
-    startBlockMapFree = block.super.nBlocks - block.super.nMapBlocks;
+    uint32_t startBlockData = FS_START_BLOCK_INODE + block.super.nInodeBlocks;
+    uint32_t startBlockMapFree = block.super.nBlocks - block.super.nMapBlocks;
+
+    // Bloco Zerado
+    Block emptyBlock;
+    memset(emptyBlock.data, 0, DISK_BLOCK_SIZE);
 
     // Zera Blocos de Inode
-    for (uint32_t i = startBlockInode; i < startBlockData; i++) {
+    // for (uint32_t i = FS_START_BLOCK_INODE; i < startBlockData; i++) {
+    //     disk.write(i, emptyBlock.data);
+    // }
+
+    // Zera Blocos de Inode, primeiro
+    for (uint32_t i = FS_START_BLOCK_INODE; i < startBlockData; i++) {
         Block inodeBlock;
         for (uint32_t j = 0; j < FS_INODES_PER_BLOCK; j++) {
             inodeBlock.inodes[j].bonds = 0;
@@ -111,26 +115,20 @@ bool FileSystem::format(Disk& disk) {
     }
 
     // Zera Bloco de Dados depois dos blocos de inode
-    for (uint32_t i = startBlockData; i < startBlockMapFree; i++) {
-        Block DataBlock;
-        memset(DataBlock.data, 0, DISK_BLOCK_SIZE);
-        disk.write(i, DataBlock.data);
-    }
+    for (uint32_t i = startBlockData; i < startBlockMapFree; i++)
+        disk.write(i, emptyBlock.data);
 
     // Zera Bloco Mapa Free
-    for (uint32_t i = startBlockMapFree; i < block.super.nBlocks; i++) {
-        Block FreeBlock;
-        memset(FreeBlock.data, 0, DISK_BLOCK_SIZE);
-        disk.write(i, FreeBlock.data);
-    }
+    for (uint32_t i = startBlockMapFree; i < block.super.nBlocks; i++)
+        disk.write(i, emptyBlock.data);
 
     // Cria entrada diretorio root
     Block blockINode;
-    disk.read(startBlockInode, blockINode.data); // Le bloco 0 de iNode
-    Inode* node = &blockINode.inodes[0];         // pega Inode
-    (node->bonds)++;                             // Marca coo valido
-    node->mode = 0b0000000100100100;             // 0000 000r--r--r-- Diretorio
-    node->direct[0] = startBlockData;            // Aloca primeiro inode data valido
+    disk.read(FS_START_BLOCK_INODE, blockINode.data); // Le bloco 0 de iNode
+    Inode* node = &blockINode.inodes[0];              // pega Inode
+    (node->bonds)++;                                  // Marca coo valido
+    node->mode = 0b0000000100100100;                  // 0000 000r--r--r-- Diretorio
+    node->direct[0] = startBlockData;                 // Aloca primeiro inode data valido
 
     // inicializa Diretorio root
     Block Dirblock;
@@ -139,12 +137,18 @@ bool FileSystem::format(Disk& disk) {
     if (add_dir_entry(0, (char*)".", Dirblock) == true) {
         if (add_dir_entry(0, (char*)"..", Dirblock) == true) {
             disk.write(node->direct[0], Dirblock.data);
-            disk.write(startBlockInode, blockINode.data);
-            return true;
+            disk.write(FS_START_BLOCK_INODE, blockINode.data);
+
+        } else {
+            return false;
         }
+    } else {
+        return false;
     }
 
-    return false;
+    // Mapear free area
+
+    return true;
 }
 
 bool FileSystem::mount(Disk& disk) {
@@ -154,7 +158,7 @@ bool FileSystem::mount(Disk& disk) {
 
     // Le o Superblock e valida totalizadores
     Block block;
-    disk.read(startBlockSuper, block.data);
+    disk.read(FS_START_BLOCK_SUPER, block.data);
 
     if (block.super.nMagic != FS_MAGIC_NUMBER)
         return false;
@@ -169,7 +173,7 @@ bool FileSystem::mount(Disk& disk) {
         return false;
 
     // define inicio de cada grupo de blocos
-    startBlockData = startBlockInode + block.super.nInodeBlocks;
+    startBlockData = FS_START_BLOCK_INODE + block.super.nInodeBlocks;
     startBlockMapFree = block.super.nBlocks - block.super.nMapBlocks;
 
     // se fs estiver protegido
@@ -198,22 +202,23 @@ bool FileSystem::mount(Disk& disk) {
     this->inode_counter.resize(MetaData.nInodeBlocks, 0);
 
     // Marca blocos de boot, super e inode como ocupados
-    for (uint32_t i = startBlockBoot; i < startBlockInode; i++)
+    for (uint32_t i = FS_START_BLOCK_BOOT; i < FS_START_BLOCK_INODE; i++)
         free_blocks[i] = true;
 
     // Percorre Blocos de inodes para marcar blocos de inode e dados em uso
-    for (uint32_t i = startBlockInode; i < startBlockData; i++) {
+    for (uint32_t i = FS_START_BLOCK_INODE; i < startBlockData; i++) {
 
         // Indice do numero de Inode
-        uint32_t indiceBlocoInode = i - startBlockInode;
+        const uint32_t indiceBlocoInode = i - FS_START_BLOCK_INODE;
 
         // Le bloco inteiro de Inode
         disk.read(i, block.data);
 
         for (uint32_t j = 0; j < FS_INODES_PER_BLOCK; j++) {
-            if (block.inodes[j].bonds > 0) {
-                this->inode_counter[indiceBlocoInode]++;
 
+            if (block.inodes[j].bonds > 0) {
+
+                this->inode_counter[indiceBlocoInode]++;
                 free_blocks[i] = true;
 
                 for (uint32_t k = 0; k < FS_POINTERS_PER_INODE; k++) {
@@ -226,14 +231,21 @@ bool FileSystem::mount(Disk& disk) {
                 }
 
                 if (block.inodes[j].indirect) {
+
                     if (block.inodes[j].indirect < MetaData.nBlocks) {
+
                         free_blocks[block.inodes[j].indirect] = true;
                         Block indirect;
+
                         disk.read(block.inodes[j].indirect, indirect.data);
+
                         for (uint32_t k = 0; k < FS_POINTERS_PER_BLOCK; k++) {
+
                             if (indirect.pointers[k] < MetaData.nBlocks) {
+
                                 if (indirect.pointers[k] != 0)
                                     free_blocks[indirect.pointers[k]] = true;
+
                             } else
                                 return false;
                         }
@@ -246,8 +258,8 @@ bool FileSystem::mount(Disk& disk) {
 
     // Carrega Diretorio Root
     Block blockINode;
-    disk.read(startBlockInode, blockINode.data); // Le bloco 0 de iNode
-    Inode* node = &blockINode.inodes[0];         // pega Inode
+    disk.read(FS_START_BLOCK_INODE, blockINode.data); // Le bloco 0 de iNode
+    Inode* node = &blockINode.inodes[0];              // pega Inode
     uint8_t tipo = node->mode >> 12;
     if ((node->bonds > 0) && (tipo == 0)) {
 
@@ -264,9 +276,9 @@ ssize_t FileSystem::create() {
         return false;
 
     Block block;
-    for (uint32_t i = startBlockInode; i < startBlockData; i++) {
+    for (uint32_t i = FS_START_BLOCK_INODE; i < startBlockData; i++) {
 
-        uint32_t indexBlockInode = i - startBlockInode;
+        uint32_t indexBlockInode = i - FS_START_BLOCK_INODE;
 
         if (inode_counter[indexBlockInode] == FS_INODES_PER_BLOCK)
             continue;
@@ -310,7 +322,7 @@ bool FileSystem::load_inode(size_t inumber, Inode* node) {
         Block block;
 
         // Encontra o Bloco de iNode Correto
-        uint32_t iBlock = indiceInodeLocal + startBlockInode;
+        uint32_t iBlock = indiceInodeLocal + FS_START_BLOCK_INODE;
 
         // Encontra o indice de Inode dentro do Bloco encontrado
         int indexINode = inumber % FS_INODES_PER_BLOCK;
@@ -343,7 +355,7 @@ bool FileSystem::remove(size_t inumber) {
         node.size = 0;
 
         uint32_t indiceInodeLocal = inumber / FS_INODES_PER_BLOCK;
-        uint32_t iBlock = indiceInodeLocal + startBlockInode;
+        uint32_t iBlock = indiceInodeLocal + FS_START_BLOCK_INODE;
 
         if (!(--inode_counter[indiceInodeLocal])) {
             this->free_blocks[iBlock] = false;
@@ -526,7 +538,7 @@ ssize_t FileSystem::write_ret(size_t inumber, Inode* node, int ret) {
         return -1;
 
     // encocntra bloco de posicao do inode correspondente
-    int i = (inumber / FS_INODES_PER_BLOCK) + startBlockInode;
+    int i = (inumber / FS_INODES_PER_BLOCK) + FS_START_BLOCK_INODE;
     int j = inumber % FS_INODES_PER_BLOCK;
 
     // Le o bloco inteiro e grava os novos dados do inode em sua posicao
